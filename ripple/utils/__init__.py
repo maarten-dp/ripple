@@ -1,0 +1,15 @@
+import time
+from typing import Callable
+
+
+def clamp(value, lowest, highest):
+    return min(highest, max(value, lowest))
+
+
+def monotonic(fn: Callable):
+    def _monotonic(*args, **kwargs):
+        now = kwargs.get("now")
+        kwargs["now"] = time.monotonic() if now is None else now
+        return fn(*args, **kwargs)
+
+    return _monotonic

@@ -1,0 +1,17 @@
+repos:
+  - repo: local
+    hooks:
+      - id: pytest
+        name: Run pytest
+        entry: pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: pyrefly
+        name: Run pyrefly type checker
+        entry: pyrefly check -o type-errors.txt
+        language: system
+        pass_filenames: false
+        always_run: true
+        types: [python]
