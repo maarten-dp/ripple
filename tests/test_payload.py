@@ -1,5 +1,5 @@
 import pytest
-from ripple.network.payload import (
+from ripple.network.protocol import (
     RecType,
     RecordMeta,
     Ack,
@@ -8,8 +8,9 @@ from ripple.network.payload import (
     EnvelopeBuilder,
     RecordFlags,
     RecordHeader,
+    RecordTooLarge,
 )
-from ripple.utils.int_types import UInt16
+from ripple.utils.int_types import UInt16, UInt32
 
 
 def test_ack_encode_decode():
@@ -25,26 +26,16 @@ def test_ack_flags():
     assert ack.flags() == RecordFlags.NONE
 
 
-def test_ack_flags_with_rid():
-    ack = Ack(ack_base=UInt16(1), mask=UInt16(0), rid=UInt16(42))
-    assert ack.flags() == RecordFlags.RELIABLE
-
-
 def test_ping_encode_decode():
-    ping = Ping(ms=1234567)
+    ping = Ping(id=UInt16(1), ms=UInt32(1234567))
     payload = ping.encode_payload()
     decoded = Ping.decode_payload(memoryview(payload))
     assert decoded.ms == 1234567
 
 
 def test_ping_flags():
-    ping = Ping(ms=100)
+    ping = Ping(id=UInt16(1), ms=UInt32(100))
     assert ping.flags() == RecordFlags.NONE
-
-
-def test_ping_flags_with_rid():
-    ping = Ping(ms=100, rid=UInt16(99))
-    assert ping.flags() == RecordFlags.RELIABLE
 
 
 def test_delta_encode_decode():
@@ -60,11 +51,6 @@ def test_delta_reliable_by_default():
     assert delta.flags() == RecordFlags.RELIABLE
 
 
-def test_delta_flags_with_rid():
-    delta = Delta(blob=b"test", rid=UInt16(10))
-    assert delta.flags() == RecordFlags.RELIABLE
-
-
 def test_record_meta_registry():
     registry = RecordMeta.get_registry()
     assert RecType.ACK in registry
@@ -77,7 +63,7 @@ def test_record_meta_registry():
 
 def test_envelope_builder_single_record():
     builder = EnvelopeBuilder(budget=1024)
-    ping = Ping(ms=123)
+    ping = Ping(id=UInt16(1), ms=UInt32(123))
     builder.add(ping)
     result = builder.finish()
     assert len(result.envelopes) == 1
@@ -88,9 +74,9 @@ def test_envelope_builder_single_record():
 
 def test_envelope_builder_multiple_records():
     builder = EnvelopeBuilder(budget=1024)
-    builder.add(Ping(ms=1))
-    builder.add(Ping(ms=2))
-    builder.add(Ping(ms=3))
+    builder.add(Ping(id=UInt16(1), ms=UInt32(1)))
+    builder.add(Ping(id=UInt16(1), ms=UInt32(2)))
+    builder.add(Ping(id=UInt16(1), ms=UInt32(3)))
     result = builder.finish()
     assert len(result.envelopes) == 1
     assert len(result.index) == 3
@@ -99,8 +85,8 @@ def test_envelope_builder_multiple_records():
 def test_envelope_builder_rollover():
     small_budget = RecordHeader.size() + 10
     builder = EnvelopeBuilder(budget=small_budget)
-    builder.add(Ping(ms=1))
-    builder.add(Ping(ms=2))
+    builder.add(Ping(id=UInt16(1), ms=UInt32(1)))
+    builder.add(Ping(id=UInt16(1), ms=UInt32(2)))
     result = builder.finish()
     assert len(result.envelopes) == 2
     assert len(result.index) == 2
@@ -112,24 +98,15 @@ def test_envelope_builder_record_too_large():
     small_budget = RecordHeader.size() + 5
     builder = EnvelopeBuilder(budget=small_budget)
     large_delta = Delta(blob=b"x" * 1000)
-    with pytest.raises(ValueError, match="Record size too big"):
+    with pytest.raises(RecordTooLarge):
         builder.add(large_delta)
-
-
-def test_envelope_builder_assign_rid():
-    builder = EnvelopeBuilder(budget=1024)
-    builder.add(Delta(blob=b"data1"))
-    builder.add(Delta(blob=b"data2"))
-    result = builder.finish()
-    assert result.index[0].rid == 0
-    assert result.index[1].rid == 1
 
 
 def test_envelope_builder_flush():
     builder = EnvelopeBuilder(budget=1024)
-    builder.add(Ping(ms=1))
+    builder.add(Ping(id=UInt16(1), ms=UInt32(1)))
     builder.flush()
-    builder.add(Ping(ms=2))
+    builder.add(Ping(id=UInt16(1), ms=UInt32(2)))
     result = builder.finish()
     assert len(result.envelopes) == 2
     assert result.index[0].envelope_idx == 0
@@ -145,22 +122,20 @@ def test_envelope_builder_empty_finish():
 
 def test_envelope_builder_packed_record_info():
     builder = EnvelopeBuilder(budget=1024)
-    ping = Ping(ms=42, rid=UInt16(7))
+    ping = Ping(id=UInt16(1), ms=UInt32(42))
     builder.add(ping)
     result = builder.finish()
     packed = result.index[0]
     assert packed.envelope_idx == 0
     assert packed.type_code == RecType.PING
-    assert packed.rid == 7
     assert packed.size_bytes > 0
 
 
 def test_envelope_builder_unreliable_ping():
     builder = EnvelopeBuilder(budget=1024)
-    ping = Ping(ms=100)
+    ping = Ping(id=UInt16(1), ms=UInt32(100))
     builder.add(ping)
     result = builder.finish()
-    assert result.index[0].rid is None
 
 
 def test_ack_value_wrapping():
@@ -172,7 +147,7 @@ def test_ack_value_wrapping():
 
 
 def test_ping_value_wrapping():
-    ping = Ping(ms=0x100000000)
+    ping = Ping(id=UInt16(1), ms=UInt32(0x100000000))
     payload = ping.encode_payload()
     decoded = Ping.decode_payload(memoryview(payload))
     assert decoded.ms == 0

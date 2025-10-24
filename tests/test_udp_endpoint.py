@@ -8,6 +8,7 @@ from ripple import (
     UdpEndpointConfig,
 )
 from ripple.core.metrics import Event, Timer
+from ripple.diagnostics import signals as s
 
 
 @pytest.fixture
@@ -55,13 +56,21 @@ def test_tx_queue_drop_newest(get_udp_endpoint):
     buffer_config = DatagramConfig(capacity=4)
     sender = get_udp_endpoint(6321, 6322, tx=buffer_config)
 
+    dropped = 0
+
+    def capture(_, buffer_name, event):
+        nonlocal dropped
+        if event == Event.ENQUEUE_DROP_NEWEST:
+            dropped += 1
+
+    s.RING_EVENT.connect(capture, sender=sender.tx_queue)
+
     for i in range(6):
         sender.send(f"{i}".encode(), addr=sender.address)
 
     assert len(sender.tx_queue) == buffer_config.capacity
     assert len(sender.tx_queue._buf) == buffer_config.capacity
 
-    dropped = sender.metrics.counters[("tx", Event.ENQUEUE_DROP_NEWEST)]
     assert dropped == 2
     items = [int(m.decode()) for (m, _) in sender.tx_queue._buf]
     assert items == [0, 1, 2, 3]
@@ -71,6 +80,15 @@ def test_rx_queue_drop_oldest(get_udp_endpoint):
     buffer_config = DatagramConfig(capacity=4, drop_policy=DropPolicy.OLDEST)
     sender = get_udp_endpoint(6321, 6322)
     receiver = get_udp_endpoint(6322, 6321, rx=buffer_config)
+
+    dropped = 0
+
+    def capture(_, buffer_name, event):
+        nonlocal dropped
+        if event == Event.ENQUEUE_DROP_OLDEST:
+            dropped += 1
+
+    s.RING_EVENT.connect(capture, sender=receiver.rx_queue)
 
     for i in range(6):
         sender.send(f"{i}".encode(), addr=receiver.address)
@@ -85,7 +103,6 @@ def test_rx_queue_drop_oldest(get_udp_endpoint):
     assert len(receiver.rx_queue) == buffer_config.capacity
     assert len(receiver.rx_queue._buf) == buffer_config.capacity
 
-    dropped = receiver.metrics.counters[("rx", Event.ENQUEUE_DROP_OLDEST)]
     assert dropped == 2
     items = [int(m.decode()) for (m, _) in receiver.rx_queue._buf]
     assert items == [4, 5, 2, 3]

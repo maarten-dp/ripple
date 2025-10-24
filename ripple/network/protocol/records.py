@@ -1,11 +1,11 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import struct
-from .base_record import Record, RecType, RecordFlags
-from ...utils.int_types import UInt16
+from .base_record import Record, RecType
+from ...utils.int_types import UInt16, UInt32
 
 ACK_FMT = "!HH"  # ack_base, mask (16-bit bitmap)
-PING_FMT = "!I"  # u32 milliseconds
+PING_FMT = "!HI"  # u32 milliseconds
 
 
 @dataclass(slots=True)
@@ -15,7 +15,7 @@ class Ack(Record):
     mask: UInt16 = UInt16(0)
 
     def encode_payload(self) -> bytes:
-        return struct.pack(ACK_FMT, self.ack_base.value, self.mask.value)
+        return struct.pack(ACK_FMT, self.ack_base, self.mask)
 
     @classmethod
     def decode_payload(cls, payload: memoryview) -> Ack:
@@ -35,18 +35,30 @@ class Ack(Record):
         return out
 
 
+from typing import overload
+
+
 @dataclass(slots=True)
 class Ping(Record):
     TYPE = RecType.PING
-    ms: int = 0
+    id: UInt16
+    ms: UInt32
 
     def encode_payload(self) -> bytes:
-        return struct.pack(PING_FMT, self.ms & 0xFFFFFFFF)
+        return struct.pack(PING_FMT, self.id, self.ms)
 
     @classmethod
-    def decode_payload(cls, payload: memoryview) -> "Ping":
-        (ms,) = struct.unpack_from(PING_FMT, payload, 0)
-        return cls(ms=ms)
+    def decode_payload(cls, payload: memoryview) -> Ping:
+        ping_id, ms = struct.unpack_from(PING_FMT, payload, 0)
+        return cls(id=ping_id, ms=ms)
+
+    def to_pong(self):
+        return Pong(id=self.id, ms=self.ms)
+
+
+@dataclass(slots=True)
+class Pong(Ping):
+    TYPE = RecType.PONG
 
 
 @dataclass(slots=True)
@@ -55,24 +67,6 @@ class Delta(Record):
     RELIABLE_BY_DEFAULT = True
 
     blob: bytes = b""
-
-    def encode_payload(self) -> bytes:
-        return self.blob
-
-    @classmethod
-    def decode_payload(cls, payload: memoryview) -> Delta:
-        return cls(blob=bytes(payload))
-
-
-@dataclass(slots=True)
-class Fragment(Record):
-    TYPE = RecType.FRAG_GENERIC
-    RELIABLE_BY_DEFAULT = True
-
-    blob: bytes = b""
-
-    def flags(self):
-        return super().flags() | RecordFlags.RELIABLE
 
     def encode_payload(self) -> bytes:
         return self.blob

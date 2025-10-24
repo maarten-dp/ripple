@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from ..utils.int_types import UInt16
-from ..network.payload import Ack
+from ..network.protocol import Ack
 
 MAX16 = 1 << 16
 HALF16 = 1 << 15

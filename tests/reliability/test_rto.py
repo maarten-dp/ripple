@@ -1,6 +1,6 @@
 import pytest
 
-from ripple.reliability.rto import RtoEstimator
+from ripple.diagnostics.rto import RtoEstimator
 
 
 def approx(x, tol=1e-9):
@@ -77,7 +77,7 @@ def test_rto_decreases_when_latency_improves():
 
 
 def test_consecutive_identical_samples_converge():
-    est = RtoEstimator(clock_granularity=0.05)
+    est = RtoEstimator(tick=0.05)
     # First sample sets baseline
     est.note_sample(0.150)
 

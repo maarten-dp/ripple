@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import TypeAlias
 
-from ..network.payload.records import Ack, Delta, Ping
+# Re-export RecordType from base_record to avoid circular imports
+from ..network.protocol.base_record import RecordType
 
-RecordType: TypeAlias = Ack | Delta | Ping
+__all__ = ["RecordType"]

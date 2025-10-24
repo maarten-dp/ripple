@@ -1,5 +1,5 @@
 import pytest
-from ripple.network.payload import PacketHeader, PacketFlags
+from ripple.network.protocol import PacketHeader, PacketFlags
 
 
 def test_packet_header_roundtrip():
@@ -58,7 +58,7 @@ def test_packet_header_flags_combinations():
 
 
 def test_packet_header_size():
-    assert PacketHeader.size() == 8
+    assert PacketHeader.size() == 10
 
 
 def test_packet_header_distance():

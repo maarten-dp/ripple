@@ -5,14 +5,14 @@ This file tracks the core tasks required to deliver the MVP for Ripple-sync.
 ---
 
 ## 0. Bootstrap & Infrastructure
-- [ ] Initialize repo (pyproject, README, license)
-- [ ] Set up formatter (black), linter (ruff), type-checker (mypy)
-- [ ] Add CI (pytest + coverage on PR)
+- [X] Initialize repo (pyproject, README, license)
+- [X] Set up formatter (black), linter (ruff), type-checker (mypy)
+- [X] Add CI (pytest + coverage on PR)
 
 ## 1. Transport & Protocol Core
-- [ ] UDP endpoint wrapper with poll/send loop
-- [ ] Packet headers: sequence number, protocol version
-- [ ] Reliability layer: selective ACKs, resend queue
+- [X] UDP endpoint wrapper with poll/send loop
+- [X] Packet headers: sequence number, protocol version
+- [X] Reliability layer: selective ACKs, resend queue
 - [ ] Fragmentation/defrag (MTU safe)
 - [ ] Ping/pong for RTT + jitter measurement
 

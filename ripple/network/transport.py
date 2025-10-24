@@ -4,25 +4,17 @@ import time
 from typing import Optional, Tuple
 
 from ..utils.ringbuffer import RingBuffer
-from ..core.metrics import Event, MetricsSink, InMemoryMetrics, Timer
-from ..core.models import UdpEndpointConfig, DatagramConfig
-
-
-def make_buffer(
-    name: str,
-    cfg: DatagramConfig,
-    metrics: MetricsSink | None = None,
-) -> RingBuffer:
-    return RingBuffer(name, cfg.capacity, cfg.drop_policy, metrics)
+from ..core.metrics import Event, Timer
+from ..core.models import UdpEndpointConfig
+from ..diagnostics import signals as s
 
 
 class UdpEndpoint:
     def __init__(self, cfg: UdpEndpointConfig):
         self.cfg = cfg
         self.sock = self._open_socket()
-        self.metrics = InMemoryMetrics()
-        self.rx_queue = make_buffer("rx", cfg.rx, self.metrics)
-        self.tx_queue = make_buffer("tx", cfg.tx, self.metrics)
+        self.rx_queue = RingBuffer("rx", cfg.rx.capacity, cfg.rx.drop_policy)
+        self.tx_queue = RingBuffer("tx", cfg.tx.capacity, cfg.tx.drop_policy)
 
     @property
     def address(self):
@@ -51,7 +43,7 @@ class UdpEndpoint:
         timer = Timer()
         self._drain("rx", max_rx, rx_budget_ms, self._rx)
         self._drain("tx", max_tx, tx_budget_ms, self._tx)
-        self.metrics.tick_event(Event.TICK_TIME, timer.delta())
+        s.TICK_EVENT.send(event=Event.TICK_TIME, delta=timer.delta())
 
     def _drain(self, name, max_msg, budget, drainer):
         timer = Timer()
@@ -59,10 +51,14 @@ class UdpEndpoint:
 
         x = 0
         while x < max_msg and time.perf_counter() < deadline and drainer():
-            self.metrics.drain_event(name, Event.DRAIN, timer.lap())
+            s.DRAIN_EVENT.send(
+                buffer_name=name, event=Event.DRAIN, time=timer.lap()
+            )
             x += 1
 
-        self.metrics.drain_event(name, Event.DRAIN_TIME, timer.delta())
+        s.DRAIN_EVENT.send(
+            buffer_name=name, event=Event.DRAIN_TIME, time=timer.delta()
+        )
 
     def _rx(self):
         r, _, _ = select.select([self.sock], [], [], 0)
@@ -85,9 +81,15 @@ class UdpEndpoint:
             else:
                 self.sock.send(payload)
         except BlockingIOError:
-            self.metrics.ring_event(self.tx_queue.name, Event.DEQUEUE_DROPPED)
+            self.tx_queue.emit(Event.DEQUEUE_DROPPED)
             return False
         return True
 
     def close(self):
         self.sock.close()
+
+    def __repr__(self):
+        return (
+            f"<UdpEndpoint local={self.cfg.local_addr}> "
+            f"remote={self.cfg.remote_addr}"
+        )

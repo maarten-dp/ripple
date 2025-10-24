@@ -1,5 +1,5 @@
 from ripple.reliability import AckMask
-from ripple.network.payload import Ack
+from ripple.network.protocol import Ack
 from ripple.utils.int_types import UInt16
 
 

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict, Iterable, Optional
-from .rto import RtoEstimator
+from ..diagnostics.rto import RtoEstimator
 from ..utils import clamp, monotonic
 
 
@@ -42,8 +42,8 @@ class ResendQueue:
         now: float,
     ) -> None:
         """Clear acked packets and sample RTT for those never retransmitted."""
-        for s in seqs:
-            p = self.pending.pop(s, None)
+        for seq in seqs:
+            p = self.pending.pop(seq, None)
             if p and p.retries == 0:
                 self.rto.note_sample(now - p.sent_at)
 

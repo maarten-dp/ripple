@@ -1,36 +1,45 @@
 import struct
-from typing import Optional, List, TypeAlias, Union
-from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional, List
+from dataclasses import dataclass, field
 
-from .base_record import Record
-
+from .base_record import Record, RecordType
 from .headers import RecordFlags
-from ..payload.base_record import Record
 from ...utils.int_types import UInt16
 
-# from ...utils.types import RecordType
 
-
-from typing import TypeAlias
-
-from .records import Ack, Delta, Ping
-from .fragments import Fragmenter, Defragmenter
-
-RecordType: TypeAlias = Ack | Delta | Ping
+class RecordTooLarge(Exception):
+    def __init__(self, record, payload):
+        super().__init__("Record too large")
+        self.record = record
+        self.payload = payload
 
 
 @dataclass(slots=True)
 class PackedRecord:
     envelope_idx: int
     type_code: int
-    rid: Optional[UInt16]
     size_bytes: int
 
 
 @dataclass(slots=True)
+class Envelope:
+    _payload: bytearray = field(default_factory=bytearray)
+    reliable: bool = False
+
+    def __len__(self):
+        return len(self._payload)
+
+    @property
+    def payload(self) -> bytes:
+        return bytes(self._payload)
+
+    def extend(self, payload):
+        self._payload.extend(payload)
+
+
+@dataclass(slots=True)
 class PackResult:
-    envelopes: List[bytes]
+    envelopes: List[Envelope]
     index: List[PackedRecord]
 
 
@@ -45,45 +54,33 @@ class EnvelopeBuilder:
         budget: int,
     ):
         self.budget = budget
-        self._current_envelope = bytearray()
-        self._envelopes: List[bytes] = []
+        self._current_envelope = Envelope()
+        self._envelopes: List[Envelope] = []
         self._index: List[PackedRecord] = []
-        self._current_rid = UInt16(-1)
-        self._fragmenter = Fragmenter(budget)
-
-    def _get_next_rid(self):
-        self._current_rid = self._current_rid + 1
-        return self._current_rid
-
-    def _fragment(self, payload):
-        pass
 
     def seal_envelope(self):
         if not self._current_envelope:
             return
-        self._envelopes.append(bytes(self._current_envelope))
-        self._current_envelope = bytearray()
+        self._envelopes.append(self._current_envelope)
+        self._current_envelope = Envelope()
 
     def add(self, record: Record):
-        if RecordFlags.RELIABLE in record.flags() and record.rid is None:
-            record.rid = self._get_next_rid()
-
         payload = record.pack()
         payload_size = len(payload)
         rollover_size = payload_size + len(self._current_envelope)
         if rollover_size > self.budget:
-            self.seal_envelope()
             if payload_size > self.budget:
-                for fragment in self._fragmenter.fragment(payload):
-                    self.add(fragment)
+                raise RecordTooLarge(record, payload)
+            self.seal_envelope()
 
         self._current_envelope.extend(payload)
+        if RecordFlags.RELIABLE in record.flags():
+            self._current_envelope.reliable = True
 
         self._index.append(
             PackedRecord(
                 envelope_idx=len(self._envelopes),
                 type_code=record.TYPE,
-                rid=record.rid,
                 size_bytes=payload_size,
             )
         )
@@ -93,12 +90,17 @@ class EnvelopeBuilder:
 
     def finish(self) -> PackResult:
         self.seal_envelope()
-        return PackResult(envelopes=self._envelopes, index=self._index)
+        envelopes = self._envelopes
+        index = self._index
+        if self._envelopes:
+            self._envelopes = []
+            self._index = []
+        return PackResult(envelopes=envelopes, index=index)
 
 
 class EnvelopeOpener:
     def __init__(self):
-        self.defragmenter = Defragmenter()
+        pass
 
     def unpack(self, payload: bytes) -> List[RecordType]:
         buffer = memoryview(payload)

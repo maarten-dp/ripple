@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 from .ackmask import AckMask
 from .resend_queue import ResendQueue
-from ..network.payload import Ack
+from ..network.protocol import Ack
 from ..utils import monotonic
 
 

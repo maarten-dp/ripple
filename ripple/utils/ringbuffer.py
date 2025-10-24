@@ -1,5 +1,6 @@
 from ..core.models import DropPolicy
-from ..core.metrics import MetricsSink, NoOpMetrics, Event
+from ..core.metrics import Event
+from ..diagnostics import signals as s
 
 
 class RingBuffer:
@@ -8,7 +9,6 @@ class RingBuffer:
         name: str,
         capacity: int,
         drop_policy: DropPolicy,
-        metrics: MetricsSink | None = None,
     ):
         self.name = name
         self._buf = [None] * capacity
@@ -17,7 +17,6 @@ class RingBuffer:
         self._tail = 0
         self._size = 0
         self.drop_policy = drop_policy
-        self.metrics = metrics or NoOpMetrics()
 
     @property
     def full(self):
@@ -36,24 +35,27 @@ class RingBuffer:
     def push(self, item):
         if self.full:
             if self.drop_policy == DropPolicy.NEWEST:
-                self.metrics.ring_event(self.name, Event.ENQUEUE_DROP_NEWEST)
+                self.emit(Event.ENQUEUE_DROP_NEWEST)
                 return False
             self._move_head()
-            self.metrics.ring_event(self.name, Event.ENQUEUE_DROP_OLDEST)
+            self.emit(Event.ENQUEUE_DROP_OLDEST)
         self._buf[self._tail] = item
         self._move_tail()
-        self.metrics.ring_event(self.name, Event.ENQUEUE_OK)
+        self.emit(Event.ENQUEUE_OK)
         return True
 
     def pop(self):
         if self.empty:
-            self.metrics.ring_event(self.name, Event.DEQUEUE_EMPTY)
+            self.emit(Event.DEQUEUE_EMPTY)
             return None
         item = self._buf[self._head]
         self._buf[self._head] = None
         self._move_head()
-        self.metrics.ring_event(self.name, Event.DEQUEUE_OK)
+        self.emit(Event.DEQUEUE_OK)
         return item
+
+    def emit(self, event):
+        s.RING_EVENT.send(self, buffer_name=self.name, event=event)
 
     def _move_head(self):
         self._head = (self._head + 1) % self._capacity
