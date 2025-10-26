@@ -6,11 +6,11 @@ from ripple.network.protocol import (
     Ping,
     Delta,
     EnvelopeBuilder,
-    RecordFlags,
     RecordHeader,
     RecordTooLarge,
 )
 from ripple.utils.int_types import UInt16, UInt32
+from ripple.type_protocols import RecordFlags
 
 
 def test_ack_encode_decode():

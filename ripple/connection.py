@@ -1,30 +1,37 @@
+from __future__ import annotations
 from typing import Optional, List
 from collections import deque
+from dataclasses import dataclass, field
 
 from .network.transport import UdpEndpoint
 from .network.protocol import (
     EnvelopeBuilder,
     EnvelopeOpener,
     RecordTooLarge,
-    Record,
-    RecordFlags,
     PacketHeader,
     PacketFlags,
     Fragmenter,
     Defragmenter,
-    Ping,
-    Pong,
     Ack,
 )
-from .network.protocol.base_record import RecordType
-from .network.health.ping_manager import PingManager
 from .reliability.engine import ReliabilityEngine
 from .core.models import UdpEndpointConfig
 from .utils.int_types import UInt16
 from .utils import monotonic
 from .diagnostics import signals as s
+from .type_protocols import RecordFlags, ConnectionExtension, RecordType
+from .network.health.ping_manager import JitterExtension
 
 
+def get_connection(*args, **kwargs) -> ReliableConnection:
+    default_extensions = [
+        JitterExtension(),
+    ]
+    kwargs["extensions"] = kwargs.get("extensions", default_extensions)
+    return ReliableConnection(*args, **kwargs)
+
+
+@dataclass
 class ReliableConnection:
     """
     Orchestrates transport, payload packing, and reliability layers.
@@ -33,25 +40,27 @@ class ReliableConnection:
     automatic reliability tracking, ACK generation, and retransmission.
     """
 
-    def __init__(
-        self,
-        endpoint_cfg: UdpEndpointConfig,
-        mtu: int = 1200,
-        ack_bits: int = 64,
-    ):
-        self.mtu = mtu
-        self.endpoint = UdpEndpoint(endpoint_cfg)
-        self.reliability = ReliabilityEngine(ack_bits=ack_bits)
-        self.builder = EnvelopeBuilder(budget=mtu)
-        self.fragmenter = Fragmenter(mtu=mtu)
+    endpoint_cfg: UdpEndpointConfig
+    mtu: int = 1200
+    ack_bits: int = 64
+    extenstions: List[ConnectionExtension] = field(default_factory=list)
+
+    def __post_init__(self):
+        self.mtu = self.mtu
+        self.endpoint = UdpEndpoint(self.endpoint_cfg)
+        self.reliability = ReliabilityEngine(ack_bits=self.ack_bits)
+        self.builder = EnvelopeBuilder(budget=self.mtu)
+        self.fragmenter = Fragmenter(mtu=self.mtu)
         self.defragmenter = Defragmenter()
         self.opener = EnvelopeOpener()
-        self.ping_manager = PingManager()
         self._seq = UInt16(0)
         self._rid = UInt16(0)
 
         # Incoming records ready for consumption
         self._recv_buffer: deque[RecordType] = deque()
+
+        for extension in self.extenstions:
+            extension.init(self)
 
     def _get_next_seq(self):
         seq = self._seq
@@ -63,7 +72,7 @@ class ReliableConnection:
         self._rid = rid + 1
         return rid
 
-    def send_record(self, record: Record) -> None:
+    def send_record(self, record: RecordType) -> None:
         s.RECORD_QUEUED_FOR_SEND.send(self, record=record)
         try:
             self.builder.add(record)
@@ -94,12 +103,13 @@ class ReliableConnection:
         tx_budget_ms: float = 0.5,
         max_rx: int = 64,
         max_tx: int = 64,
-    ):
+    ) -> None:
         self.endpoint.tick(rx_budget_ms, tx_budget_ms, max_rx, max_tx)
 
         self._process_incoming()
         self._send_pending_acks()
-        self._send_ping()
+        for extension in self.extenstions:
+            extension.on_tick()
         self._process_retransmits(now=now)
         self._process_outgoing(now=now)
 
@@ -148,12 +158,14 @@ class ReliableConnection:
             if isinstance(record, Ack):
                 s.RECV_ACK.send(self, ack=record)
                 self.reliability.note_ack_record(record)
-            elif isinstance(record, Ping):
-                self.send_record(pong := self.ping_manager.on_recv_ping(record))
-                s.PONG_SENT.send(self, pong=pong)
-            elif isinstance(record, Pong):
-                self.ping_manager.on_recv_pong(record)
-            else:
+                continue
+
+            consumed = False
+            for extension in self.extenstions:
+                if consumed := extension.on_record(record=record):
+                    break
+
+            if not consumed:
                 self._recv_buffer.append(record)
 
     def _send_pending_acks(self):
@@ -161,13 +173,6 @@ class ReliableConnection:
         if ack is not None:
             s.SEND_ACK.send(self, ack=ack)
             self.send_record(ack)
-
-    def _send_ping(self):
-        if self.ping_manager.is_due():
-            self.send_record(ping := self.ping_manager.make_ping())
-            s.PING_SENT.send(self, ping=ping)
-        for pruned in self.ping_manager.prune():
-            s.PING_LOST.send(self, ping=pruned)
 
     @monotonic
     def _process_retransmits(self, now: float):
@@ -208,7 +213,7 @@ class ReliableConnection:
         if reliable:
             self.reliability.note_sent(rid, payload)
 
-    def close(self):
+    def close(self) -> None:
         self.endpoint.close()
 
     @property

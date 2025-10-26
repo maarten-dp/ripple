@@ -1,53 +1,28 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from enum import IntEnum, auto
 from typing import (
     ClassVar,
     Type,
     Dict,
     Tuple,
-    TYPE_CHECKING,
-    TypeAlias,
-    cast,
 )
 from typing_extensions import Self
 
-from .headers import RecordFlags, RecordHeader
+from .headers import RecordHeader
 from ...utils.int_types import UInt16, UInt8
-
-if TYPE_CHECKING:
-    from .records import Ack, Delta, Ping
-
-    RecordType: TypeAlias = Ack | Delta | Ping
-
-
-# _RID_FMT = ">H"
-# _RID_SIZE = struct.calcsize(_RID_FMT)
-
-
-class RecType(IntEnum):
-    ACK = auto()
-    PING = auto()
-    PONG = auto()
-    HELLO = auto()
-    AUTH = auto()
-    SNAPSHOT = auto()
-    DELTA = auto()
-    INPUT = auto()
-    FRAG_SNAPSHOT = auto()
-    FRAG_GENERIC = auto()
+from ...type_protocols import RecordFlags, RecType, RecordType
 
 
 class RecordMeta(type):
-    _registry: Dict[RecType, Type["RecordType"]] = {}
+    _registry: Dict[RecType, Type[RecordType]] = {}
 
-    def __init__(cls: Type["RecordType"], name, bases, namespace):
+    def __init__(cls: Type[RecordType], name, bases, namespace):
         super().__init__(name, bases, namespace)
         if hasattr(cls, "TYPE"):
             RecordMeta._registry[cls.TYPE] = cls
 
     @classmethod
-    def get_registry(mcs) -> Dict[RecType, Type["RecordType"]]:
+    def get_registry(mcs) -> Dict[RecType, Type[RecordType]]:
         return dict(mcs._registry)
 
 
@@ -75,7 +50,7 @@ class Record(metaclass=RecordMeta):
     def unpack(
         cls,
         buffer: memoryview,
-    ) -> Tuple["RecordType", RecordHeader]:
+    ) -> Tuple[Self | RecordType, RecordHeader]:
         header = RecordHeader.unpack(buffer)
 
         # If called on base class, dispatch to concrete type
@@ -84,7 +59,6 @@ class Record(metaclass=RecordMeta):
             if record_class is None:
                 raise KeyError(f"Unknown record type: {header.type}")
             return record_class.unpack(buffer)
-        cls = cast(Type["RecordType"], cls)
 
         # If called on concrete class, validate type matches
         if header.type != cls.TYPE:
@@ -108,10 +82,3 @@ class Record(metaclass=RecordMeta):
     @classmethod
     def decode_payload(cls, payload: memoryview) -> Self:
         raise NotImplementedError
-
-
-# Runtime imports (happens after class definitions are complete)
-# Type checkers use the TYPE_CHECKING import at the top instead
-from .records import Ack, Delta, Ping, Pong
-
-RecordType: TypeAlias = Ack | Delta | Ping | Pong

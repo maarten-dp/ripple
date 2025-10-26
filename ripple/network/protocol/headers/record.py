@@ -1,7 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from functools import partial
-from enum import IntFlag
 import struct
 
 from ....utils.int_types import UInt8, UInt16
@@ -15,12 +14,6 @@ _RECORD_HEADER_FMT = f"{_ENDIAN}{_TYPE}{_FLAGS}{_LENGTH}"
 _RECORD_HEADER_SIZE = struct.calcsize(_RECORD_HEADER_FMT)
 pack = partial(struct.pack, _RECORD_HEADER_FMT)
 unpack = partial(struct.unpack_from, _RECORD_HEADER_FMT)
-
-
-class RecordFlags(IntFlag):
-    NONE = 0
-    RELIABLE = 0x01
-    URGENT = 0x02
 
 
 @dataclass(frozen=True)

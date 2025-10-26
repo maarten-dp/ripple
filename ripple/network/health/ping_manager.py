@@ -1,10 +1,11 @@
-from time import monotonic_ns
-from typing import Optional, Dict
+from typing import Dict
 
 from ..protocol.records import Ping, Pong
 from ...diagnostics.rto import RtoEstimator, RtpJitter, OnlineStdDev
 from ...utils import monotonic, UInt16, UInt32
-
+from ...type_protocols import ConnectionType
+from ...diagnostics import signals as s
+from ...type_protocols import RecordType
 
 HALF_UINT32 = UInt32(-1) / 2
 
@@ -67,3 +68,36 @@ class PingManager:
             stale = ping.ms + self.interval_ms
             if (now - stale) < HALF_UINT32:
                 yield self.outstanding.pop(ping_id)
+
+
+class JitterExtension:
+    def __init__(self, **options):
+        self.connection: ConnectionType | None = None
+        self.ping_manager = PingManager(**options)
+
+    def init(self, connection: ConnectionType):
+        self.connection = connection
+
+    def on_tick(self):
+        if self.connection is None:
+            raise RuntimeError("Extension not initialised yet")
+
+        if self.ping_manager.is_due():
+            self.connection.send_record(ping := self.ping_manager.make_ping())
+            s.PING_SENT.send(self, ping=ping)
+        for pruned in self.ping_manager.prune():
+            s.PING_LOST.send(self, ping=pruned)
+
+    def on_record(self, record: RecordType) -> bool:
+        if self.connection is None:
+            raise RuntimeError("Extension not initialised yet")
+
+        if isinstance(record, Pong):
+            self.ping_manager.on_recv_pong(record)
+        elif isinstance(record, Ping):
+            pong = self.ping_manager.on_recv_ping(record)
+            self.connection.send_record(pong)
+            s.PONG_SENT.send(self, pong=pong)
+        else:
+            return False
+        return True

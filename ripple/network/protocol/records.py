@@ -1,6 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import ClassVar
+from typing_extensions import Self
 import struct
+
 from .base_record import Record, RecType
 from ...utils.int_types import UInt16, UInt32
 
@@ -40,7 +43,7 @@ from typing import overload
 
 @dataclass(slots=True)
 class Ping(Record):
-    TYPE = RecType.PING
+    TYPE: ClassVar[RecType] = RecType.PING
     id: UInt16
     ms: UInt32
 
@@ -48,17 +51,17 @@ class Ping(Record):
         return struct.pack(PING_FMT, self.id, self.ms)
 
     @classmethod
-    def decode_payload(cls, payload: memoryview) -> Ping:
+    def decode_payload(cls, payload: memoryview) -> Self:
         ping_id, ms = struct.unpack_from(PING_FMT, payload, 0)
         return cls(id=ping_id, ms=ms)
 
-    def to_pong(self):
+    def to_pong(self) -> Pong:
         return Pong(id=self.id, ms=self.ms)
 
 
 @dataclass(slots=True)
 class Pong(Ping):
-    TYPE = RecType.PONG
+    TYPE: ClassVar[RecType] = RecType.PONG
 
 
 @dataclass(slots=True)

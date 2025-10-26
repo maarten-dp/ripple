@@ -7,12 +7,7 @@ from .envelope import (
     PackResult,
     PackedRecord,
 )
-from .headers import (
-    PacketHeader,
-    PacketFlags,
-    RecordHeader,
-    RecordFlags,
-)
+from .headers import PacketHeader, PacketFlags, RecordHeader
 from .fragmenter import Fragmenter, Defragmenter
 
 __all__ = [
@@ -31,7 +26,6 @@ __all__ = [
     "PacketHeader",
     "PacketFlags",
     "RecordHeader",
-    "RecordFlags",
     "Fragmenter",
     "Defragmenter",
 ]

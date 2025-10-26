@@ -3,8 +3,7 @@ from typing import Optional, List
 from dataclasses import dataclass, field
 
 from .base_record import Record, RecordType
-from .headers import RecordFlags
-from ...utils.int_types import UInt16
+from ...type_protocols import RecordFlags, RecordType
 
 
 class RecordTooLarge(Exception):
@@ -64,7 +63,7 @@ class EnvelopeBuilder:
         self._envelopes.append(self._current_envelope)
         self._current_envelope = Envelope()
 
-    def add(self, record: Record):
+    def add(self, record: RecordType):
         payload = record.pack()
         payload_size = len(payload)
         rollover_size = payload_size + len(self._current_envelope)
