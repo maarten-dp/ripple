@@ -199,8 +199,8 @@ class ReliableConnection:
         reliable: bool,
         fragment: bool = False,
     ):
-        flags = 0
-        rid = 0
+        flags = PacketFlags(0)
+        rid = UInt16(0)
         if reliable:
             flags = PacketFlags.RELIABLE
             rid = self._get_next_rid()

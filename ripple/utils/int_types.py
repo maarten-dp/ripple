@@ -10,6 +10,7 @@ def uint_field(uint_class: type[UIntBase]) -> Any:
 
 class UIntBase(int):
     _mask: int
+    _struct_format: str
 
     def __new__(cls, value: float | int | Self | None = None) -> Self:
         if value:
@@ -203,11 +204,14 @@ class UIntBase(int):
 
 class UInt8(UIntBase):
     _mask = 0xFF
+    _struct_format = "B"
 
 
 class UInt16(UIntBase):
     _mask = 0xFFFF
+    _struct_format = "H"
 
 
 class UInt32(UIntBase):
     _mask = 0xFFFFFFFF
+    _struct_format = "I"
