@@ -3,9 +3,9 @@ from typing import Dict
 from ..protocol.records import Ping, Pong
 from ...diagnostics.rto import RtoEstimator, RtpJitter, OnlineStdDev
 from ...utils import monotonic, UInt16, UInt32
-from ...type_protocols import ConnectionType
+from ...interfaces import ConnectionType
 from ...diagnostics import signals as s
-from ...type_protocols import RecordType
+from ...interfaces import RecordType
 
 HALF_UINT32 = UInt32(-1) / 2
 

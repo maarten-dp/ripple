@@ -13,8 +13,8 @@ This file tracks the core tasks required to deliver the MVP for Ripple-sync.
 - [X] UDP endpoint wrapper with poll/send loop
 - [X] Packet headers: sequence number, protocol version
 - [X] Reliability layer: selective ACKs, resend queue
-- [ ] Fragmentation/defrag (MTU safe)
-- [ ] Ping/pong for RTT + jitter measurement
+- [X] Fragmentation/defrag (MTU safe)
+- [X] Ping/pong for RTT + jitter measurement
 
 ## 2. Serialization & Messages
 - [ ] Define schema for `Hello`, `Auth`, `Snapshot`, `Delta`, `Ack`

@@ -19,7 +19,7 @@ from .core.models import UdpEndpointConfig
 from .utils.int_types import UInt16
 from .utils import monotonic
 from .diagnostics import signals as s
-from .type_protocols import RecordFlags, ConnectionExtension, RecordType
+from .interfaces import RecordFlags, ConnectionExtension, RecordType
 from .network.health.ping_manager import JitterExtension
 
 

@@ -10,7 +10,7 @@ from typing_extensions import Self
 
 from .headers import RecordHeader
 from ...utils.int_types import UInt16, UInt8
-from ...type_protocols import RecordFlags, RecType, RecordType
+from ...interfaces import RecordFlags, RecType, RecordType
 
 
 class RecordMeta(type):

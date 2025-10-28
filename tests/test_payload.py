@@ -10,7 +10,7 @@ from ripple.network.protocol import (
     RecordTooLarge,
 )
 from ripple.utils.int_types import UInt16, UInt32
-from ripple.type_protocols import RecordFlags
+from ripple.interfaces import RecordFlags
 
 
 def test_ack_encode_decode():

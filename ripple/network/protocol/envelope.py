@@ -3,7 +3,7 @@ from typing import Optional, List
 from dataclasses import dataclass, field
 
 from .base_record import Record, RecordType
-from ...type_protocols import RecordFlags, RecordType
+from ...interfaces import RecordFlags, RecordType
 
 
 class RecordTooLarge(Exception):
