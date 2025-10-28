@@ -11,11 +11,15 @@ class PackableType(Protocol):
     @classmethod
     def unpack(cls, buffer: memoryview) -> Self: ...
 
-    @staticmethod
-    def size() -> int: ...
+    @classmethod
+    def size(cls) -> int: ...
 
 
 class HeaderType(PackableType): ...
+
+
+class RecordHeaderType(PackableType):
+    def record_size(self) -> int: ...
 
 
 class RecordType(Protocol):
@@ -28,4 +32,4 @@ class RecordType(Protocol):
     @classmethod
     def unpack(
         cls, buffer: memoryview
-    ) -> Tuple[Self | RecordType, HeaderType]: ...
+    ) -> Tuple[Self | RecordType, RecordHeaderType]: ...

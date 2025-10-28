@@ -11,7 +11,7 @@ from typing_extensions import Self
 from .headers import RecordHeader
 from ...utils.int_types import UInt16, UInt8
 from ...utils.packable import PackableMeta, PackInfo
-from ...interfaces import RecordFlags, RecType, RecordType
+from ...interfaces import RecordFlags, RecType, RecordType, RecordHeaderType
 
 
 class RecordMeta(PackableMeta):
@@ -27,7 +27,6 @@ class RecordMeta(PackableMeta):
         return dict(mcs._registry)
 
 
-@dataclass(slots=True)
 class Record(metaclass=RecordMeta):
     TYPE: ClassVar[RecType]
     RELIABLE_BY_DEFAULT: ClassVar[bool] = False

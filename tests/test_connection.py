@@ -5,7 +5,7 @@ from ripple import Address, UdpEndpointConfig
 from ripple.connection import ReliableConnection
 from ripple.network.protocol import Delta, Ping
 from ripple.core.metrics import Timer
-from ripple.utils.int_types import UInt16, UInt32
+from ripple.utils import UInt16, UInt32, FreeFormField
 from ripple.diagnostics import signals as s
 
 
@@ -58,7 +58,7 @@ def test_basic_reliable_send_receive(get_connection):
     sender._rid = UInt16(15)
 
     # Send reliable delta
-    delta = Delta(blob=b"test payload")
+    delta = Delta(blob=FreeFormField(b"test payload"))
     sender.send_record(delta)
 
     timer = Timer()
@@ -83,9 +83,9 @@ def test_multiple_records_in_single_envelope(get_connection):
 
     # Send multiple records
     sender.send_record(Ping(id=UInt16(1), ms=UInt32(1)))
-    sender.send_record(Delta(blob=b"first"))
+    sender.send_record(Delta(blob=FreeFormField(b"first")))
     sender.send_record(Ping(id=UInt16(1), ms=UInt32(2)))
-    sender.send_record(Delta(blob=b"second"))
+    sender.send_record(Delta(blob=FreeFormField(b"second")))
 
     timer = Timer()
     records = []
@@ -118,10 +118,10 @@ def test_bidirectional_communication(get_connection):
     conn_b = get_connection(7008, 7007)
 
     # A sends to B
-    conn_a.send_record(Delta(blob=b"from A"))
+    conn_a.send_record(Delta(blob=FreeFormField(b"from A")))
 
     # B sends to A
-    conn_b.send_record(Delta(blob=b"from B"))
+    conn_b.send_record(Delta(blob=FreeFormField(b"from B")))
 
     timer = Timer()
     a_received = None
@@ -172,7 +172,7 @@ def test_ack_generation_and_processing(get_connection):
     receiver = get_connection(7014, 7013)
 
     # Send a reliable record
-    sender.send_record(Delta(blob=b"reliable data"))
+    sender.send_record(Delta(blob=FreeFormField(b"reliable data")))
 
     timer = Timer()
     received = False
@@ -218,7 +218,7 @@ def test_it_can_deal_with_a_fragmented_package(get_connection):
     sender = get_connection(7013, 7014, mtu=20)
     receiver = get_connection(7014, 7013, mtu=20)
 
-    sender.send_record(Delta(blob=b"a" * 40))
+    sender.send_record(Delta(blob=FreeFormField(b"a" * 40)))
     assert len(sender.fragmenter._fragments) == 5
 
     timer = Timer()

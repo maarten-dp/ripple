@@ -7,7 +7,7 @@ from ripple.network.protocol import (
     EnvelopeBuilder,
     EnvelopeOpener,
 )
-from ripple.utils.int_types import UInt16, UInt32
+from ripple.utils import UInt16, UInt32, FreeFormField
 
 
 def test_it_can_roundtrip_single_ping():
@@ -45,7 +45,7 @@ def test_it_can_roundtrip_single_delta():
     builder = EnvelopeBuilder(budget=1024)
     opener = EnvelopeOpener()
 
-    original = Delta(blob=b"test data payload")
+    original = Delta(blob=FreeFormField(b"test data payload"))
     builder.add(original)
     result = builder.finish()
 
@@ -63,7 +63,7 @@ def test_it_can_roundtrip_multiple_records_in_same_envelope():
     ping1 = Ping(id=UInt16(1), ms=UInt32(100))
     ping2 = Ping(id=UInt16(1), ms=UInt32(200))
     ack = Ack(ack_base=UInt16(50), mask=UInt16(0xFF))
-    delta = Delta(blob=b"some data")
+    delta = Delta(blob=FreeFormField(b"some data"))
 
     builder.add(ping1)
     builder.add(ping2)
@@ -121,7 +121,7 @@ def test_it_can_roundtrip_empty_delta():
     builder = EnvelopeBuilder(budget=1024)
     opener = EnvelopeOpener()
 
-    delta = Delta(blob=b"")
+    delta = Delta(blob=FreeFormField(b""))
     builder.add(delta)
     result = builder.finish()
 
@@ -136,7 +136,7 @@ def test_it_can_roundtrip_large_delta():
     opener = EnvelopeOpener()
 
     large_data = b"x" * 1024
-    delta = Delta(blob=large_data)
+    delta = Delta(blob=FreeFormField(large_data))
     builder.add(delta)
     result = builder.finish()
 
@@ -173,7 +173,9 @@ def test_it_can_roundtrip_all_record_types():
     records_to_pack = [
         Ack(ack_base=UInt16(42), mask=UInt16(0x1234)),
         Ping(id=UInt16(1), ms=UInt32(9999)),
-        Delta(blob=b"test blob data"),
+        Delta(
+            blob=FreeFormField(b"test blob data"),
+        ),
     ]
 
     for rec in records_to_pack:
