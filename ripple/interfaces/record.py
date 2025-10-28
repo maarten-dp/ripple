@@ -5,14 +5,17 @@ from typing_extensions import Self
 from .enums import RecType, RecordFlags
 
 
-class HeaderType(Protocol):
+class PackableType(Protocol):
     def pack(self) -> bytes: ...
 
     @classmethod
-    def unpack(cls, buffer: memoryview) -> HeaderType: ...
+    def unpack(cls, buffer: memoryview) -> Self: ...
 
     @staticmethod
     def size() -> int: ...
+
+
+class HeaderType(PackableType): ...
 
 
 class RecordType(Protocol):
@@ -26,7 +29,3 @@ class RecordType(Protocol):
     def unpack(
         cls, buffer: memoryview
     ) -> Tuple[Self | RecordType, HeaderType]: ...
-
-    def encode_payload(self) -> bytes: ...
-    @classmethod
-    def decode_payload(cls, payload: memoryview) -> Self: ...

@@ -53,7 +53,3 @@ This file tracks the core tasks required to deliver the MVP for Ripple-sync.
 - [ ] Example: cubes demo (spawn/move cubes, sync transforms)
 - [ ] Quickstart docs (setup, run demo)
 - [ ] Troubleshooting guide (warping, packet loss, divergence)
-
----
-
-✅ When all boxes are checked, you’ll have a working MVP that matches the goals we set earlier.

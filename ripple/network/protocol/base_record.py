@@ -10,10 +10,11 @@ from typing_extensions import Self
 
 from .headers import RecordHeader
 from ...utils.int_types import UInt16, UInt8
+from ...utils.packable import PackableMeta, PackInfo
 from ...interfaces import RecordFlags, RecType, RecordType
 
 
-class RecordMeta(type):
+class RecordMeta(PackableMeta):
     _registry: Dict[RecType, Type[RecordType]] = {}
 
     def __init__(cls: Type[RecordType], name, bases, namespace):
@@ -30,6 +31,7 @@ class RecordMeta(type):
 class Record(metaclass=RecordMeta):
     TYPE: ClassVar[RecType]
     RELIABLE_BY_DEFAULT: ClassVar[bool] = False
+    _pack_info: ClassVar[PackInfo]
 
     def flags(self) -> RecordFlags:
         if self.RELIABLE_BY_DEFAULT:
@@ -37,7 +39,7 @@ class Record(metaclass=RecordMeta):
         return RecordFlags.NONE
 
     def pack(self) -> bytes:
-        payload = self.encode_payload()
+        payload = self._pack_info.packer(self)
 
         header = RecordHeader(
             type=UInt8(self.TYPE),
@@ -72,13 +74,7 @@ class Record(metaclass=RecordMeta):
         payload = buffer[payload_start:payload_end]
 
         # Decode payload
-        record = cls.decode_payload(payload)
+        parameters = cls._pack_info.unpacker(payload)
+        record = cls(**parameters)
 
         return record, header
-
-    def encode_payload(self) -> bytes:
-        raise NotImplementedError
-
-    @classmethod
-    def decode_payload(cls, payload: memoryview) -> Self:
-        raise NotImplementedError
