@@ -5,8 +5,10 @@ import struct
 from typing import (
     Annotated,
     List,
+    Dict,
     ClassVar,
-    Callable,
+    Tuple,
+    Type,
     get_type_hints,
     get_origin,
     get_args,
@@ -16,87 +18,11 @@ from enum import IntFlag, IntEnum
 from dataclasses import dataclass, field
 from inspect import isclass
 
-from .int_types import UIntBase, UInt16
+from .int_types import UIntBase, UInt8, UInt16, UInt32
+from ..interfaces import PackerType
 
 _ENDIAN = "!"
 _INT_ENUM_FMT = "B"
-
-
-def _get_stuct_packer(struct_format, struct_fields, annotations):
-    struct_size = struct.calcsize(struct_format)
-
-    def packer(packable):
-        values = []
-        for field in struct_fields:
-            values.append(getattr(packable, field))
-        return struct.pack(struct_format, *values)
-
-    def unpacker(buffer: memoryview):
-        if len(buffer) < struct_size:
-            raise ValueError("buffer too small for unpacking")
-        values = {}
-        payload_buffer = buffer[:struct_size]
-        unpacked = struct.unpack_from(struct_format, payload_buffer)
-        for field, value in zip(struct_fields, unpacked):
-            values[field] = annotations[field](value)
-        return values
-
-    return PackInfo(
-        struct_size=struct_size,
-        struct_format=struct_format,
-        struct_fields=struct_fields,
-        packer=packer,
-        unpacker=unpacker,
-    )
-
-
-def _get_freeform_packer(formfields):
-    def packer(packable):
-        payload = b""
-        for field in formfields:
-            payload += getattr(packable, field).pack()
-        return payload
-
-    def unpacker(buffer: memoryview):
-        offset = 0
-        values = {}
-        for field in formfields:
-            payload = FreeFormField.unpack(buffer[offset:])
-            values[field] = payload
-            offset += payload.length
-        return values
-
-    return PackInfo(
-        struct_size=-1,
-        struct_format="",
-        struct_fields=formfields,
-        packer=packer,
-        unpacker=unpacker,
-    )
-
-
-def _get_combined_packer(struct_info: PackInfo, free_info: PackInfo):
-    def packer(packable):
-        payload = struct_info.packer(packable)
-        payload += free_info.packer(packable)
-        return payload
-
-    def unpacker(buffer: memoryview):
-        fields = struct_info.unpacker(buffer)
-        offset = struct_info.struct_size
-        fields.update(free_info.unpacker(buffer[offset:]))
-        return fields
-
-    return PackInfo(
-        struct_size=-1,
-        struct_format="",
-        struct_fields=[
-            *struct_info.struct_fields,
-            *free_info.struct_fields,
-        ],
-        packer=packer,
-        unpacker=unpacker,
-    )
 
 
 @dataclass(frozen=True)
@@ -105,7 +31,86 @@ class PackLen:
 
 
 @dataclass
-class FreeFormField:
+class StructPacker:
+    struct_format: str
+    struct_fields: List[str]
+    annotations: Dict[str, Type[UInt8 | UInt16 | UInt32]]
+
+    @property
+    def size(self) -> int:
+        return struct.calcsize(self.struct_format)
+
+    def pack(self, packable: UIntBase) -> bytes:
+        values = []
+        for field in self.struct_fields:
+            values.append(getattr(packable, field))
+        return struct.pack(self.struct_format, *values)
+
+    def unpack(
+        self, buffer: memoryview
+    ) -> Tuple[Dict[str, UInt8 | UInt16 | UInt32], int]:
+        if len(buffer) < self.size:
+            raise ValueError("buffer too small for unpacking")
+        values = {}
+        payload_buffer = buffer[: self.size]
+        unpacked = struct.unpack_from(self.struct_format, payload_buffer)
+        for field, value in zip(self.struct_fields, unpacked):
+            values[field] = self.annotations[field](value)
+        return values, self.size
+
+
+@dataclass
+class BytesPacker:
+    formfields: List[str]
+
+    @property
+    def size(self) -> int:
+        raise ValueError("Cannot determine size for BytesField")
+
+    def pack(self, packable: BytesField) -> bytes:
+        payload = b""
+        for field in self.formfields:
+            payload += getattr(packable, field).pack()
+        return payload
+
+    def unpack(self, buffer: memoryview) -> Tuple[Dict[str, BytesField], int]:
+        offset = 0
+        values = {}
+        for field in self.formfields:
+            payload = BytesField.unpack(buffer[offset:])
+            values[field] = payload
+            offset += payload.length
+        return values, offset
+
+
+@dataclass
+class PackerGroup:
+    packers: List[PackerType] = field(default_factory=list)
+
+    def add(self, packer: PackerType):
+        self.packers.append(packer)
+
+    @property
+    def size(self) -> int:
+        return sum([p.size for p in self.packers])
+
+    def pack(self, packable: Packables) -> bytes:
+        payload = b""
+        for packer in self.packers:
+            payload += packer.pack(packable)
+        return payload
+
+    def unpack(self, buffer: memoryview) -> Tuple[Dict[str, Packables], int]:
+        offset = 0
+        fields = {}
+        for packer in self.packers:
+            unpacked_fields, offset = packer.unpack(buffer[offset:])
+            fields.update(unpacked_fields)
+        return fields, offset
+
+
+@dataclass
+class BytesField:
     payload: bytes
     length: UInt16 = field(init=False, default=UInt16(0))
 
@@ -113,7 +118,9 @@ class FreeFormField:
     _fmt_size: ClassVar[int] = struct.calcsize(_fmt)
 
     def __post_init__(self):
-        self.length = len(self.payload)
+        if len(self.payload) > UInt16(-1):
+            raise ValueError("Payload too large")
+        self.length = UInt16(len(self.payload))
 
     def pack(self) -> bytes:
         return struct.pack(self._fmt, self.length) + self.payload
@@ -124,21 +131,12 @@ class FreeFormField:
         start = cls._fmt_size
         end = start + length
         payload = buffer[start:end]
-        return cls(payload)
+        return cls(bytes(payload))
 
-    def __eq__(self, other: FreeFormField | bytes):
+    def __eq__(self, other: BytesField | bytes):
         if isinstance(other, bytes):
             return self.payload == other
         self.payload == other.payload
-
-
-@dataclass
-class PackInfo:
-    struct_size: int
-    struct_format: str
-    struct_fields: List[str]
-    packer: Callable
-    unpacker: Callable
 
 
 class PackableMeta(type):
@@ -151,8 +149,9 @@ class PackableMeta(type):
         globalsns = vars(sys.modules[cls.__module__])
         globalsns.update(
             {
-                "PackInfo": PackInfo,
                 "ClassVar": ClassVar,
+                "PackerGroup": PackerGroup,
+                "PackerType": PackerType,
             }
         )
 
@@ -179,7 +178,7 @@ class PackableMeta(type):
                 fmt = ann_type._struct_format
             elif issubclass(ann_type, (IntEnum, IntFlag)):
                 fmt = _INT_ENUM_FMT
-            elif ann_type is FreeFormField:
+            elif ann_type is BytesField:
                 freefields.append(field)
                 continue
             else:
@@ -188,34 +187,31 @@ class PackableMeta(type):
             struct_format = f"{struct_format}{fmt}"
             struct_fields.append(field)
 
-        struct_pack_info = None
-        free_pack_info = None
+        packer = PackerGroup()
         if struct_fields:
-            struct_pack_info = _get_stuct_packer(
-                struct_format, struct_fields, annotations
-            )
+            packer.add(StructPacker(struct_format, struct_fields, annotations))
         if freefields:
-            free_pack_info = _get_freeform_packer(freefields)
+            packer.add(BytesPacker(freefields))
 
-        pack_info = struct_pack_info or free_pack_info
-        if struct_pack_info and free_pack_info:
-            pack_info = _get_combined_packer(struct_pack_info, free_pack_info)
-
-        cls._pack_info = pack_info
+        cls._packer = packer
         return cls
 
 
 class Packable(metaclass=PackableMeta):
-    _pack_info: ClassVar[PackInfo]
+    _packer: ClassVar[PackerGroup]
 
     def pack(self) -> bytes:
-        return self._pack_info.packer(self)
+        return self._packer.pack(self)
 
     @classmethod
     def unpack(cls, buffer: memoryview) -> Self:
-        parameters = cls._pack_info.unpacker(buffer)
+        parameters, _ = cls._packer.unpack(buffer)
         return cls(**parameters)
 
     @classmethod
     def size(cls) -> int:
-        return cls._pack_info.struct_size
+        return cls._packer.size
+
+
+Packables = UInt8 | UInt16 | UInt32 | BytesField | Packable
+PackablesType = Type[Packables]

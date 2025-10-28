@@ -5,7 +5,7 @@ from typing import ClassVar
 from .base_record import Record, RecType
 from ...utils.int_types import UInt8, UInt16, UInt32
 from ...interfaces import DisconnectReason
-from ...utils.packable import FreeFormField
+from ...utils.packable import BytesField
 
 
 @dataclass(slots=True)
@@ -31,7 +31,7 @@ class Auth(Record):
     TYPE: ClassVar[RecType] = RecType.AUTH
 
     method: UInt8
-    credential: FreeFormField
+    credential: BytesField
 
 
 @dataclass(slots=True)
@@ -40,7 +40,7 @@ class AuthResult(Record):
 
     ok: UInt8
     session_id: UInt32
-    msg: FreeFormField
+    msg: BytesField
 
 
 @dataclass(slots=True)
@@ -48,7 +48,7 @@ class Disconnect(Record):
     TYPE: ClassVar[RecType] = RecType.DISCONNECT
 
     reason_code: DisconnectReason
-    msg: FreeFormField
+    msg: BytesField
 
 
 @dataclass(slots=True)
@@ -91,4 +91,4 @@ class Delta(Record):
     TYPE: ClassVar[RecType] = RecType.DELTA
     RELIABLE_BY_DEFAULT = True
 
-    blob: FreeFormField = FreeFormField(b"")
+    blob: BytesField = BytesField(b"")

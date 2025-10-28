@@ -10,7 +10,7 @@ from typing_extensions import Self
 
 from .headers import RecordHeader
 from ...utils.int_types import UInt16, UInt8
-from ...utils.packable import PackableMeta, PackInfo
+from ...utils.packable import PackableMeta, PackerType
 from ...interfaces import RecordFlags, RecType, RecordType, RecordHeaderType
 
 
@@ -30,7 +30,7 @@ class RecordMeta(PackableMeta):
 class Record(metaclass=RecordMeta):
     TYPE: ClassVar[RecType]
     RELIABLE_BY_DEFAULT: ClassVar[bool] = False
-    _pack_info: ClassVar[PackInfo]
+    _packer: ClassVar[PackerType]
 
     def flags(self) -> RecordFlags:
         if self.RELIABLE_BY_DEFAULT:
@@ -38,7 +38,7 @@ class Record(metaclass=RecordMeta):
         return RecordFlags.NONE
 
     def pack(self) -> bytes:
-        payload = self._pack_info.packer(self)
+        payload = self._packer.pack(self)
 
         header = RecordHeader(
             type=UInt8(self.TYPE),
@@ -73,7 +73,7 @@ class Record(metaclass=RecordMeta):
         payload = buffer[payload_start:payload_end]
 
         # Decode payload
-        parameters = cls._pack_info.unpacker(payload)
+        parameters, _ = cls._packer.unpack(payload)
         record = cls(**parameters)
 
         return record, header

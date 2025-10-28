@@ -9,7 +9,7 @@ from ripple.network.protocol import (
     RecordHeader,
     RecordTooLarge,
 )
-from ripple.utils import UInt16, UInt32, FreeFormField
+from ripple.utils import UInt16, UInt32, BytesField
 from ripple.interfaces import RecordFlags
 
 
@@ -40,14 +40,14 @@ def test_ping_flags():
 
 def test_delta_encode_decode():
     data = b"test payload data"
-    delta = Delta(blob=FreeFormField(data))
+    delta = Delta(blob=BytesField(data))
     payload = delta.pack()
     decoded, _ = Delta.unpack(memoryview(payload))
     assert decoded.blob == data
 
 
 def test_delta_reliable_by_default():
-    delta = Delta(blob=FreeFormField(b"test"))
+    delta = Delta(blob=BytesField(b"test"))
     assert delta.flags() == RecordFlags.RELIABLE
 
 
@@ -97,7 +97,7 @@ def test_envelope_builder_rollover():
 def test_envelope_builder_record_too_large():
     small_budget = RecordHeader.size() + 5
     builder = EnvelopeBuilder(budget=small_budget)
-    large_delta = Delta(blob=FreeFormField(b"x" * 1000))
+    large_delta = Delta(blob=BytesField(b"x" * 1000))
     with pytest.raises(RecordTooLarge):
         builder.add(large_delta)
 
@@ -154,7 +154,7 @@ def test_ping_value_wrapping():
 
 
 def test_delta_empty_blob():
-    delta = Delta(blob=FreeFormField(b""))
+    delta = Delta(blob=BytesField(b""))
     payload = delta.pack()
     decoded, _ = Delta.unpack(memoryview(payload))
     assert decoded.blob == b""

@@ -2,7 +2,7 @@ import time
 from typing import Callable
 
 from .int_types import UInt8, UInt16, UInt32
-from .packable import FreeFormField
+from .packable import BytesField
 
 
 def clamp(value, lowest, highest):
@@ -22,7 +22,7 @@ __all__ = [
     "UInt8",
     "UInt16",
     "UInt32",
-    "FreeFormField",
+    "BytesField",
     "clamp",
     "monotonic",
 ]
