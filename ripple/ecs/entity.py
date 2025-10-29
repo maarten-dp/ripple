@@ -60,12 +60,12 @@ class Entity:
             packer=get_packer(value_component.__class__),
         )
         # Keep a local cache for snapshotting
-        self.components[self.entity_id] = component
+        self.components[component.component_id] = component
         self.world.store.add_component(self.entity_id, component)
 
     def add_components(self, components: List[Observable]):
         for component in components:
             self.add_component(component)
 
-    def get_component(self, component_type: Type[Observable]):
+    def get_component(self, component_type: Type[Observable]) -> Observable:
         return self.world.store.get_component(self.entity_id, component_type)

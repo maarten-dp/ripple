@@ -1,4 +1,6 @@
 from inspect import get_annotations, isclass
+from dataclasses import dataclass, field
+from typing import Dict, Set, Any
 
 from ..utils import UInt8, UInt16, UInt32
 
@@ -43,6 +45,8 @@ class ObservableMeta(type):
         annotations = get_annotations(stub_cls, eval_str=True)
 
         for name, field_type in annotations.items():
+            if name in ("_values", "_dirty"):
+                continue
             if field_type not in ALLOWED_TYPES.values():
                 msg = f"Only {', '.join(ALLOWED_TYPES)} are allowed for now"
                 raise ValueError(msg)
@@ -54,9 +58,10 @@ class ObservableMeta(type):
         return super().__new__(cls, name, bases, dct)
 
 
+@dataclass
 class Observable(metaclass=ObservableMeta):
-    _values = {}
-    _dirty = set()
+    _values: Dict[str, Any] = field(default_factory=dict, init=False)
+    _dirty: Set[str] = field(default_factory=set, init=False)
 
     def __post_init__(self):
         self._dirty = set()

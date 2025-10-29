@@ -1,4 +1,5 @@
-from typing import Dict, Tuple, Any, Iterable, Type, TYPE_CHECKING
+from __future__ import annotations
+from typing import Dict, Iterable, Type, TYPE_CHECKING
 from dataclasses import dataclass, field
 from collections import defaultdict
 
@@ -29,7 +30,7 @@ class ComponentStore:
         return self.data.keys()
 
     def empty(self):
-        return bool(self.data)
+        return not bool(self.data)
 
 
 @dataclass
