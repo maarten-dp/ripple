@@ -1,0 +1,125 @@
+from __future__ import annotations
+from typing import List, Dict, TYPE_CHECKING
+from dataclasses import dataclass, field
+
+from .entity import Entity, Component
+from .utils import IdGenerator
+from ..utils import UInt16
+
+
+if TYPE_CHECKING:
+    from .world import World
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    id: UInt16 = field(default_factory=IdGenerator())
+    entities: Dict[UInt16, EntitySnapshot] = field(default_factory=dict)
+
+    @classmethod
+    def from_world(self, world: World):
+        entities = {}
+        for eid, entity in world.entities.items():
+            entities[eid] = EntitySnapshot.from_entity(entity)
+        return Snapshot(entities=entities)
+
+    def get_delta_from(self, snapshot: Snapshot) -> DeltaSnapshot | None:
+        """Get delta from snapshot to self"""
+        if self.id == snapshot.id:
+            return
+        from_eids = set(snapshot.entities)
+        to_eids = set(self.entities)
+
+        despawned = list(from_eids.difference(to_eids))
+        spawned = [self.entities[e] for e in to_eids.difference(from_eids)]
+        candidates = to_eids.intersection(from_eids)
+        updates = {}
+
+        for eid in candidates:
+            entity = snapshot.entities[eid]
+            if delta := entity.get_delta_from(self.entities[eid]):
+                updates[eid] = delta
+
+        return DeltaSnapshot(
+            spawns=spawned,
+            despawns=despawned,
+            updates=updates,
+        )
+
+
+@dataclass(frozen=True)
+class EntitySnapshot:
+    version: UInt16
+    id: UInt16
+    components: Dict[UInt16, ComponentSnapshot] = field(default_factory=dict)
+
+    @classmethod
+    def from_entity(cls, entity: Entity):
+        component_snapshots = {}
+        for comp_id, component in entity.components.items():
+            delta = ComponentSnapshot.from_component(component)
+            component_snapshots[comp_id] = delta
+
+        return cls(
+            id=entity.entity_id,
+            version=entity.version_id,
+            components=component_snapshots,
+        )
+
+    def get_delta_from(
+        self,
+        snapshot: EntitySnapshot,
+    ) -> DeltaEntitySnapshot | None:
+        """Get delta from snapshot to self"""
+        if self.id == snapshot.id:
+            return
+        from_cids = set(snapshot.components)
+        to_cids = set(self.components)
+
+        despawned = list(from_cids.difference(to_cids))
+        spawned = [self.components[e] for e in to_cids.difference(from_cids)]
+        candidates = to_cids.intersection(from_cids)
+        updates = {}
+
+        for cid in candidates:
+            component = self.components[cid]
+            if snapshot.components[cid].version != component.version:
+                updates[cid] = component
+
+        return DeltaEntitySnapshot(
+            spawns=spawned,
+            despawns=despawned,
+            updates=updates,
+        )
+
+
+@dataclass(frozen=True)
+class ComponentSnapshot:
+    id: UInt16
+    version: UInt16
+    data: bytes
+
+    @classmethod
+    def from_component(cls, component: Component):
+        if component.instance._dirty:
+            component.version_id += 1
+            component.instance._dirty.clear()
+        return cls(
+            id=component.component_id,
+            version=component.version_id,
+            data=component.pack(),
+        )
+
+
+@dataclass(frozen=True)
+class DeltaSnapshot:
+    spawns: List[EntitySnapshot]
+    despawns: List[UInt16]
+    updates: Dict[UInt16, DeltaEntitySnapshot]
+
+
+@dataclass(frozen=True)
+class DeltaEntitySnapshot:
+    spawns: List[ComponentSnapshot]
+    despawns: List[UInt16]
+    updates: Dict[UInt16, ComponentSnapshot]

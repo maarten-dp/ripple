@@ -1,6 +1,6 @@
 from ripple.reliability import AckMask
 from ripple.network.protocol import Ack
-from ripple.utils.int_types import UInt16
+from ripple.utils import UInt16
 
 
 def test_ackmask_linear():

@@ -4,7 +4,7 @@ from ripple.network.protocol.fragmenter import (
     FragmentHeader,
     Defragmenter,
 )
-from ripple.utils.int_types import UInt16
+from ripple.utils import UInt16
 
 
 def test_it_can_fragment_a_payload():

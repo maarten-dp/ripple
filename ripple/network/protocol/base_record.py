@@ -9,7 +9,7 @@ from typing import (
 from typing_extensions import Self
 
 from .headers import RecordHeader
-from ...utils.int_types import UInt16, UInt8
+from ...utils import UInt16, UInt8
 from ...utils.packable import PackableMeta, PackerType
 from ...interfaces import RecordFlags, RecType, RecordType, RecordHeaderType
 

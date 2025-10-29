@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import struct
+from inspect import get_annotations
 from typing import (
     Annotated,
     List,
@@ -18,11 +19,50 @@ from enum import IntFlag, IntEnum
 from dataclasses import dataclass, field
 from inspect import isclass
 
-from .int_types import UIntBase, UInt8, UInt16, UInt32
+from .numerical_types import UIntBase, UInt8, UInt16, UInt32
 from ..interfaces import PackerType
 
 _ENDIAN = "!"
 _INT_ENUM_FMT = "B"
+
+
+def make_packer(cls) -> Packer:
+    annotations = get_annotations(cls, eval_str=True)
+    struct_format = _ENDIAN
+    struct_fields = []
+    freefields = []
+
+    for field, ann_type in annotations.items():
+        origin = get_origin(ann_type)
+        if origin is ClassVar:
+            continue
+        elif origin is Annotated:
+            base, *meta = get_args(ann_type)
+            if base is bytes and len(meta) == 1:
+                if isinstance(meta[0], PackLen):
+                    fmt = f"{meta[0].n}s"
+        elif not isclass(ann_type):
+            continue
+        elif issubclass(ann_type, UIntBase):
+            fmt = ann_type._struct_format
+        elif issubclass(ann_type, (IntEnum, IntFlag)):
+            fmt = _INT_ENUM_FMT
+        elif ann_type is BytesField:
+            freefields.append(field)
+            continue
+        else:
+            continue
+
+        struct_format = f"{struct_format}{fmt}"
+        struct_fields.append(field)
+
+    packer = Packer()
+    if struct_fields:
+        struct_instance = struct.Struct(struct_format)
+        packer.add(StructPacker(struct_instance, struct_fields, annotations))
+    if freefields:
+        packer.add(BytesPacker(freefields))
+    return packer
 
 
 @dataclass(frozen=True)
@@ -32,19 +72,19 @@ class PackLen:
 
 @dataclass
 class StructPacker:
-    struct_format: str
+    struct: struct.Struct
     struct_fields: List[str]
     annotations: Dict[str, Type[UInt8 | UInt16 | UInt32]]
 
     @property
     def size(self) -> int:
-        return struct.calcsize(self.struct_format)
+        return self.struct.size
 
     def pack(self, packable: UIntBase) -> bytes:
         values = []
         for field in self.struct_fields:
             values.append(getattr(packable, field))
-        return struct.pack(self.struct_format, *values)
+        return self.struct.pack(*values)
 
     def unpack(
         self, buffer: memoryview
@@ -53,7 +93,7 @@ class StructPacker:
             raise ValueError("buffer too small for unpacking")
         values = {}
         payload_buffer = buffer[: self.size]
-        unpacked = struct.unpack_from(self.struct_format, payload_buffer)
+        unpacked = self.struct.unpack_from(payload_buffer)
         for field, value in zip(self.struct_fields, unpacked):
             values[field] = self.annotations[field](value)
         return values, self.size
@@ -84,7 +124,7 @@ class BytesPacker:
 
 
 @dataclass
-class PackerGroup:
+class Packer:
     packers: List[PackerType] = field(default_factory=list)
 
     def add(self, packer: PackerType):
@@ -142,63 +182,12 @@ class BytesField:
 class PackableMeta(type):
     def __new__(cls, name, bases, dct):
         cls = super().__new__(cls, name, bases, dct)
-
-        struct_format = _ENDIAN
-        struct_fields = []
-
-        globalsns = vars(sys.modules[cls.__module__])
-        globalsns.update(
-            {
-                "ClassVar": ClassVar,
-                "PackerGroup": PackerGroup,
-                "PackerType": PackerType,
-            }
-        )
-
-        annotations = get_type_hints(
-            cls,
-            globalns=globalsns,
-            localns=vars(cls),
-            include_extras=True,
-        )
-
-        freefields = []
-        for field, ann_type in annotations.items():
-            origin = get_origin(ann_type)
-            if origin is ClassVar:
-                continue
-            elif origin is Annotated:
-                base, *meta = get_args(ann_type)
-                if base is bytes and len(meta) == 1:
-                    if isinstance(meta[0], PackLen):
-                        fmt = f"{meta[0].n}s"
-            elif not isclass(ann_type):
-                continue
-            elif issubclass(ann_type, UIntBase):
-                fmt = ann_type._struct_format
-            elif issubclass(ann_type, (IntEnum, IntFlag)):
-                fmt = _INT_ENUM_FMT
-            elif ann_type is BytesField:
-                freefields.append(field)
-                continue
-            else:
-                continue
-
-            struct_format = f"{struct_format}{fmt}"
-            struct_fields.append(field)
-
-        packer = PackerGroup()
-        if struct_fields:
-            packer.add(StructPacker(struct_format, struct_fields, annotations))
-        if freefields:
-            packer.add(BytesPacker(freefields))
-
-        cls._packer = packer
+        cls._packer = make_packer(cls)
         return cls
 
 
 class Packable(metaclass=PackableMeta):
-    _packer: ClassVar[PackerGroup]
+    _packer: ClassVar[Packer]
 
     def pack(self) -> bytes:
         return self._packer.pack(self)

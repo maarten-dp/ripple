@@ -1,4 +1,4 @@
-from ripple.utils.int_types import UInt8, UInt16
+from ripple.utils import UInt8, UInt16
 
 
 def test_uint8_initialization():

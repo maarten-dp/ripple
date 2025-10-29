@@ -16,7 +16,7 @@ from .network.protocol import (
 )
 from .reliability.engine import ReliabilityEngine
 from .core.models import UdpEndpointConfig
-from .utils.int_types import UInt16
+from .utils import UInt16
 from .utils import monotonic
 from .diagnostics import signals as s
 from .interfaces import RecordFlags, ConnectionExtension, RecordType

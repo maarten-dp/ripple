@@ -1,7 +1,7 @@
 import time
 from typing import Callable
 
-from .int_types import UInt8, UInt16, UInt32
+from .numerical_types import UInt8, UInt16, UInt32
 from .packable import BytesField
 
 

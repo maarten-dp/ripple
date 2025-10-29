@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from ..utils.int_types import UInt16
+from ..utils import UInt16
 from ..network.protocol import Ack
 
 MAX16 = 1 << 16

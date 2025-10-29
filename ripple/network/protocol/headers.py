@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Annotated
 from dataclasses import dataclass
 
-from ...utils.int_types import UInt8, UInt16, UInt32
+from ...utils import UInt8, UInt16, UInt32
 from ...interfaces import PacketFlags
 from ...utils.packable import Packable, PackLen
 

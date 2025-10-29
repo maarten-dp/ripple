@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from .base_record import Record, RecType
-from ...utils.int_types import UInt8, UInt16, UInt32
+from ...utils import UInt8, UInt16, UInt32
 from ...interfaces import DisconnectReason
 from ...utils.packable import BytesField
 
@@ -89,6 +89,14 @@ class Pong(Ping):
 @dataclass(slots=True)
 class Delta(Record):
     TYPE: ClassVar[RecType] = RecType.DELTA
+    RELIABLE_BY_DEFAULT = True
+
+    blob: BytesField = BytesField(b"")
+
+
+@dataclass(slots=True)
+class Snapshot(Record):
+    TYPE: ClassVar[RecType] = RecType.SNAPSHOT
     RELIABLE_BY_DEFAULT = True
 
     blob: BytesField = BytesField(b"")

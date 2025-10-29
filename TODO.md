@@ -17,8 +17,8 @@ This file tracks the core tasks required to deliver the MVP for Ripple-sync.
 - [X] Ping/pong for RTT + jitter measurement
 
 ## 2. Serialization & Messages
-- [ ] Define schema for `Hello`, `Auth`, `Snapshot`, `Delta`, `Ack`
-- [ ] Implement serializer with bit-packing + float quantization
+- [X] Define schema for `Hello`, `Auth`, `Snapshot`, `Delta`, `Ack`
+- [X] Implement serializer with bit-packing + float quantization
 - [ ] Delta encoding: per-component + snapshot-to-snapshot
 
 ## 3. State Replication

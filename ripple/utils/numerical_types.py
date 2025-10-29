@@ -4,6 +4,9 @@ from dataclasses import field
 from typing_extensions import Self
 
 
+Q16_16_SCALE = 1 << 16
+
+
 def uint_field(uint_class: type[UIntBase]) -> Any:
     return field(default_factory=lambda: uint_class(0))
 
@@ -215,3 +218,79 @@ class UInt16(UIntBase):
 class UInt32(UIntBase):
     _mask = 0xFFFFFFFF
     _struct_format = "I"
+
+    def to_q16_16(self) -> Q16_16:
+        return Q16_16(self / Q16_16_SCALE)
+
+
+class Q16_16(float):
+    def to_uint32(self) -> UInt32:
+        return UInt32(self * Q16_16_SCALE)
+
+
+# # ==========================================================
+# # quant.py — Float quantization helpers
+# # ==========================================================
+# # Big-endian struct format helper
+# BE = ">"  # network byte order
+
+
+# def clamp(x: float, lo: float, hi: float) -> float:
+#     return hi if x > hi else lo if x < lo else x
+
+
+# # --- Linear quantizers -------------------------------------------------------
+# # q16.16: store as signed 32-bit fixed point (int32)
+# SCALE_Q16_16 = float(1 << 16)
+
+
+# def f_to_q16_16(x: float) -> int:
+#     xi = int(
+#         round(
+#             clamp(x, -2147483648.0 / SCALE_Q16_16, 2147483647.0 / SCALE_Q16_16)
+#             * SCALE_Q16_16
+#         )
+#     )
+#     # two's complement range already enforced by clamp
+#     return xi
+
+
+# def q16_16_to_f(i: int) -> float:
+#     return float(i) / SCALE_Q16_16
+
+
+# # q meters within range [-max_m, max_m] into signed 16 bits (s16)
+# # Example: 0.01 m precision with max_m = 327.67 -> maps to [-327.67, 327.67]
+
+
+# def f_to_s16(x: float, max_m: float, step: float) -> int:
+#     # steps per meter -> scale
+#     scale = 1.0 / step
+#     lo, hi = -max_m, max_m
+#     x = clamp(x, lo, hi)
+#     v = int(round(x * scale))
+#     return max(-32768, min(32767, v))
+
+
+# def s16_to_f(v: int, step: float) -> float:
+#     return float(v) * step
+
+
+# # Unsigned 16-bit for angles (0..360) using wraparound mapping
+# def angle_deg_to_u16(deg: float) -> int:
+#     # Map degrees to [0, 65535], where 65536 corresponds to 360
+#     turns = (deg / 360.0) % 1.0
+#     return int(round(turns * 65535.0)) & 0xFFFF
+
+
+# def u16_to_angle_deg(v: int) -> float:
+#     return (float(v) / 65535.0) * 360.0
+
+
+# # Velocity quantization: meters/sec into s16 with selectable step
+# def vel_to_s16(v_ms: float, max_ms: float, step: float) -> int:
+#     return f_to_s16(v_ms, max_ms, step)
+
+
+# def s16_to_vel(v: int, step: float) -> float:
+#     return s16_to_f(v, step)
