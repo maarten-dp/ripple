@@ -10,6 +10,13 @@ logger = logging.getLogger("ripple")
 logger.setLevel(logging.INFO)
 
 
+debug_signals = [
+    "DRAIN_EVENT",
+    "TICK_EVENT",
+    "RING_EVENT",
+]
+
+
 def format_addr(addr):
     return f"{addr.host}:{addr.port}"
 
@@ -23,7 +30,10 @@ def log(signal, sender, **kwargs):
             f"{format_addr(cfg.local_addr)}->{format_addr(cfg.remote_addr)} "
         )
     line = f"{originator}{signal}: {kwargs}"
-    logger.info(line)
+    if signal in debug_signals:
+        logger.debug(line)
+    else:
+        logger.info(line)
 
 
 def setup_logging():

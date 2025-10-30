@@ -62,6 +62,9 @@ class ReliableConnection:
 
         for extension in self.extenstions:
             extension.init(self)
+        s.CONNECTION_STARTED.send(
+            self, mtu=self.mtu, extension=self.extenstions
+        )
 
     def _get_next_seq(self):
         seq = self._seq
@@ -154,6 +157,7 @@ class ReliableConnection:
             return
 
         for record in records:
+            s.RECORD_PARSED.send(self, record=record)
             if isinstance(record, Ack):
                 s.RECV_ACK.send(self, ack=record)
                 self.reliability.note_ack_record(record)
