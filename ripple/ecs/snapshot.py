@@ -56,9 +56,15 @@ class EntitySnapshot:
     @classmethod
     def from_entity(cls, entity: Entity):
         component_snapshots = {}
+        dirty = []
         for comp_id, component in entity.components.items():
+            cversion = component.version_id
             delta = ComponentSnapshot.from_component(component)
+            dirty.append(cversion != component.version_id)
             component_snapshots[comp_id] = delta
+
+        if any(dirty):
+            entity.version_id += 1
 
         return cls(
             id=entity.entity_id,
@@ -71,7 +77,7 @@ class EntitySnapshot:
         snapshot: EntitySnapshot,
     ) -> DeltaEntitySnapshot | None:
         """Get delta from snapshot to self"""
-        if self.id == snapshot.id:
+        if self.version == snapshot.version:
             return
         from_cids = set(snapshot.components)
         to_cids = set(self.components)
@@ -117,9 +123,15 @@ class DeltaSnapshot:
     despawns: List[UInt16]
     updates: Dict[UInt16, DeltaEntitySnapshot]
 
+    def __bool__(self):
+        return bool(self.spawns or self.despawns or self.updates)
+
 
 @dataclass(frozen=True)
 class DeltaEntitySnapshot:
     spawns: List[ComponentSnapshot]
     despawns: List[UInt16]
     updates: Dict[UInt16, ComponentSnapshot]
+
+    def __bool__(self):
+        return bool(self.spawns or self.despawns or self.updates)

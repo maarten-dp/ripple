@@ -1,10 +1,15 @@
 import pytest
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from ripple.ecs.world import World
-from ripple.ecs.snapshot import Snapshot
+from ripple.ecs.snapshot import Snapshot, ComponentSnapshot
 from ripple.ecs.observability import Observable
 from ripple.utils import UInt16
+
+
+@dataclass
+class Pos(Observable):
+    x: UInt16
 
 
 @pytest.fixture
@@ -19,56 +24,78 @@ def test_it_can_create_and_destroy_entities(world: World):
     assert entity.entity_id not in world.entities
 
 
-def test_it_can_snapshot_world_and_produce_deltas(world: World):
-    @dataclass
-    class Pos(Observable):
-        x: UInt16
+def test_it_can_make_a_world_snapshot(world: World):
+    world.create_entity(Pos(UInt16(1)))
+    snapshot = Snapshot.from_world(world)
+    expected_snapshot = {
+        "id": UInt16(0),
+        "entities": {
+            UInt16(1): {
+                "version": UInt16(0),
+                "id": UInt16(1),
+                "components": {
+                    UInt16(8): {
+                        "id": UInt16(8),
+                        "version": UInt16(0),
+                        "data": b"\x00\x01",
+                    }
+                },
+            }
+        },
+    }
+    assert asdict(snapshot) == expected_snapshot
 
-    entity = world.create_entity(Pos(UInt16(1)))
 
-    snap1 = Snapshot.from_world(world)
+def test_it_can_make_a_snapshot_delta_when_enitity_is_dirty(world: World):
+    pos = Pos(UInt16(1))
+    entity = world.create_entity(pos)
+    snapshot_t1 = Snapshot.from_world(world)
 
-    # modify component to create dirty
-    comp = entity.get_component(Pos)
-    comp.x = UInt16(2)
+    pos.x = UInt16(2)
 
-    snap2 = Snapshot.from_world(world)
+    snapshot_t2 = Snapshot.from_world(world)
 
-    delta = snap2.get_delta_from(snap1)
-    assert delta is not None
-    # expect spawned maybe empty, updates should include our entity id
+    delta = snapshot_t2.get_delta_from(snapshot_t1)
+    assert delta
     assert entity.entity_id in delta.updates
-    ent_delta = delta.updates[entity.entity_id]
-    # component updates should contain the component id
-    assert len(ent_delta.updates) >= 1
+    entity_delta = delta.updates[entity.entity_id]
+    assert len(entity_delta.updates) == 1
 
 
-def test_component_apply_validates_and_applies(world: World):
-    @dataclass
-    class P(Observable):
-        x: UInt16
+def test_it_can_make_an_empty_snapshot_delta_when_enitity_is_not_dirty(
+    world: World,
+):
+    world.create_entity(Pos(UInt16(1)))
+    snapshot_t1 = Snapshot.from_world(world)
+    snapshot_t2 = Snapshot.from_world(world)
 
-    e = world.create_entity()
-    p = P(UInt16(5))
-    e.add_component(p)
+    delta = snapshot_t2.get_delta_from(snapshot_t1)
+    assert not delta
 
-    comp = e.components[e.entity_id]
-    snap = comp.packer.pack(p)
-    # create a fake ComponentSnapshot with wrong id
-    from ripple.ecs.snapshot import ComponentSnapshot
 
-    bad = ComponentSnapshot(id=UInt16(9999), version=UInt16(1), data=snap)
-    with pytest.raises(ValueError):
-        comp.apply(bad)
+def test_it_cannot_apply_snapshots_from_different_component(world: World):
+    pos = Pos(UInt16(1))
+    entity = world.create_entity(pos)
+    pos_component = list(entity.components.values())[0]
 
-    # create a good delta: use from_component to produce snapshot
-    good = ComponentSnapshot.from_component(comp)
-    # mutate instance so apply does something
-    comp.instance.x = UInt16(6)
-    # now apply should raise if version mismatch (since from_component used current comp.version)
-    # create a future version (jump ahead)
+    bad = ComponentSnapshot(id=UInt16(9999), version=UInt16(1), data=b"")
+    with pytest.raises(
+        ValueError, match="Cannot apply delta from other component"
+    ):
+        pos_component.apply(bad)
+
+
+def test_it_cannot_apply_snapshots_from_version_too_far_in_the_future(
+    world: World,
+):
+    pos = Pos(UInt16(1))
+    entity = world.create_entity(pos)
+    pos_component = list(entity.components.values())[0]
+
     future = ComponentSnapshot(
-        id=comp.component_id, version=comp.version_id + 2, data=snap
+        id=pos_component.component_id,
+        version=pos_component.version_id + 2,
+        data=b"",
     )
-    with pytest.raises(ValueError):
-        comp.apply(future)
+    with pytest.raises(ValueError, match="Version too far in the future"):
+        pos_component.apply(future)

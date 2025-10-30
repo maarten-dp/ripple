@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Type, List, Dict, cast, TYPE_CHECKING
+from typing import Type, Iterable, Dict, cast, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from .utils import IdGenerator
@@ -11,7 +11,6 @@ from ..utils.packable import Packer, Packable, make_packer
 if TYPE_CHECKING:
     from .world import World
     from .snapshot import Snapshot, EntitySnapshot, ComponentSnapshot
-
 
 PACKERS = {}
 
@@ -38,7 +37,7 @@ class Component:
         if delta.id != self.component_id:
             raise ValueError("Cannot apply delta from other component")
         if delta.version > self.version_id + 1:
-            raise ValueError("Missing delta version")
+            raise ValueError("Version too far in the future")
 
         unpacked, _ = self.packer.unpack(memoryview(delta.data))
         self.instance._values.update(unpacked)
@@ -63,7 +62,7 @@ class Entity:
         self.components[component.component_id] = component
         self.world.store.add_component(self.entity_id, component)
 
-    def add_components(self, components: List[Observable]):
+    def add_components(self, components: Iterable[Observable]):
         for component in components:
             self.add_component(component)
 
