@@ -1,7 +1,6 @@
 from io import BytesIO
 
 from ripple.network.protocol import (
-    Delta,
     Ack,
     Ping,
     EnvelopeBuilder,
@@ -41,29 +40,29 @@ def test_it_can_roundtrip_single_ack():
     assert records[0].mask == 0xABCD
 
 
-def test_it_can_roundtrip_single_delta():
+def test_it_can_roundtrip_single_delta(ReliableRecord):
     builder = EnvelopeBuilder(budget=1024)
     opener = EnvelopeOpener()
 
-    original = Delta(blob=BytesField(b"test data payload"))
+    original = ReliableRecord(blob=BytesField(b"test data payload"))
     builder.add(original)
     result = builder.finish()
 
     assert len(result.envelopes) == 1
     records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 1
-    assert isinstance(records[0], Delta)
+    assert isinstance(records[0], ReliableRecord)
     assert records[0].blob == b"test data payload"
 
 
-def test_it_can_roundtrip_multiple_records_in_same_envelope():
+def test_it_can_roundtrip_multiple_records_in_same_envelope(ReliableRecord):
     builder = EnvelopeBuilder(budget=1024)
     opener = EnvelopeOpener()
 
     ping1 = Ping(id=UInt16(1), ms=UInt32(100))
     ping2 = Ping(id=UInt16(1), ms=UInt32(200))
     ack = Ack(ack_base=UInt16(50), mask=UInt16(0xFF))
-    delta = Delta(blob=BytesField(b"some data"))
+    delta = ReliableRecord(blob=BytesField(b"some data"))
 
     builder.add(ping1)
     builder.add(ping2)
@@ -85,7 +84,7 @@ def test_it_can_roundtrip_multiple_records_in_same_envelope():
     assert records[2].ack_base == 50
     assert records[2].mask == 0xFF
 
-    assert isinstance(records[3], Delta)
+    assert isinstance(records[3], ReliableRecord)
     assert records[3].blob == b"some data"
 
 
@@ -117,32 +116,32 @@ def test_it_can_roundtrip_across_multiple_envelopes():
     assert all_records[2].ms == 3
 
 
-def test_it_can_roundtrip_empty_delta():
+def test_it_can_roundtrip_empty_delta(ReliableRecord):
     builder = EnvelopeBuilder(budget=1024)
     opener = EnvelopeOpener()
 
-    delta = Delta(blob=BytesField(b""))
+    delta = ReliableRecord(blob=BytesField(b""))
     builder.add(delta)
     result = builder.finish()
 
     records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 1
-    assert isinstance(records[0], Delta)
+    assert isinstance(records[0], ReliableRecord)
     assert records[0].blob == b""
 
 
-def test_it_can_roundtrip_large_delta():
+def test_it_can_roundtrip_large_delta(ReliableRecord):
     builder = EnvelopeBuilder(budget=2048)
     opener = EnvelopeOpener()
 
     large_data = b"x" * 1024
-    delta = Delta(blob=BytesField(large_data))
+    delta = ReliableRecord(blob=BytesField(large_data))
     builder.add(delta)
     result = builder.finish()
 
     records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 1
-    assert isinstance(records[0], Delta)
+    assert isinstance(records[0], ReliableRecord)
     assert records[0].blob == large_data
 
 
@@ -166,14 +165,14 @@ def test_it_handles_wraparound_values():
     assert records[1].ms == 0xFFFFFFFF
 
 
-def test_it_can_roundtrip_all_record_types():
+def test_it_can_roundtrip_all_record_types(ReliableRecord):
     builder = EnvelopeBuilder(budget=2048)
     opener = EnvelopeOpener()
 
     records_to_pack = [
         Ack(ack_base=UInt16(42), mask=UInt16(0x1234)),
         Ping(id=UInt16(1), ms=UInt32(9999)),
-        Delta(
+        ReliableRecord(
             blob=BytesField(b"test blob data"),
         ),
     ]
@@ -193,7 +192,7 @@ def test_it_can_roundtrip_all_record_types():
     assert isinstance(unpacked_records[1], Ping)
     assert unpacked_records[1].ms == 9999
 
-    assert isinstance(unpacked_records[2], Delta)
+    assert isinstance(unpacked_records[2], ReliableRecord)
     assert unpacked_records[2].blob == b"test blob data"
 
 

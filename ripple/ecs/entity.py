@@ -40,7 +40,7 @@ class Component:
         if delta.version > self.version_id + 1:
             raise ValueError("Version too far in the future")
 
-        unpacked, _ = self.packer.unpack(BytesIO(delta.data))
+        unpacked = self.packer.unpack(BytesIO(delta.data.payload))
         self.instance._values.update(unpacked)
         self.version_id = delta.version
         self.instance._dirty.clear()

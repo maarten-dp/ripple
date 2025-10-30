@@ -4,7 +4,7 @@ from dataclasses import dataclass, asdict
 from ripple.ecs.world import World
 from ripple.ecs.snapshot import Snapshot, ComponentSnapshot
 from ripple.ecs.observability import Observable
-from ripple.utils import UInt16
+from ripple.utils import UInt16, BytesField
 
 
 @dataclass
@@ -37,7 +37,10 @@ def test_it_can_make_a_world_snapshot(world: World):
                     UInt16(8): {
                         "id": UInt16(8),
                         "version": UInt16(0),
-                        "data": b"\x00\x01",
+                        "data": {
+                            "payload": b"\x00\x01",
+                            "length": UInt16(2),
+                        },
                     }
                 },
             }
@@ -78,7 +81,9 @@ def test_it_cannot_apply_snapshots_from_different_component(world: World):
     entity = world.create_entity(pos)
     pos_component = list(entity.components.values())[0]
 
-    bad = ComponentSnapshot(id=UInt16(9999), version=UInt16(1), data=b"")
+    bad = ComponentSnapshot(
+        id=UInt16(9999), version=UInt16(1), data=BytesField(b"")
+    )
     with pytest.raises(
         ValueError, match="Cannot apply delta from other component"
     ):
@@ -95,7 +100,7 @@ def test_it_cannot_apply_snapshots_from_version_too_far_in_the_future(
     future = ComponentSnapshot(
         id=pos_component.component_id,
         version=pos_component.version_id + 2,
-        data=b"",
+        data=BytesField(b""),
     )
     with pytest.raises(ValueError, match="Version too far in the future"):
         pos_component.apply(future)

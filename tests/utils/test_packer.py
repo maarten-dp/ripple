@@ -93,7 +93,7 @@ def test_it_can_pack_simple_iterable_field_packable():
     @dataclass
     class IterablePackable(Packable):
         field1: List[UInt8]
-        field2: Tuple[BytesField]
+        field2: Tuple[BytesField, ...]
         field3: Set[UInt16]
 
     assert len(IterablePackable._packer.packers) == 1
@@ -211,7 +211,7 @@ def test_it_can_pack_mixed_field_packable():
         field3: UInt16
         field4: BytesField
         field5: SimplePackable
-        field6: Tuple[UInt16]
+        field6: Tuple[UInt16, ...]
         field7: Dict[UInt16, SimplePackable]
         field8: UInt32
 
@@ -222,7 +222,7 @@ def test_it_can_pack_mixed_field_packable():
         BytesField(b"Some value"),
         UInt16(2),
         BytesField(b"Another value"),
-        SimplePackable(UInt8(3), [UInt16(4)]),
+        SimplePackable(UInt8(3), [UInt16(4), UInt16(5)]),
         (UInt16(5), UInt16(6)),
         {UInt16(7): SimplePackable(UInt8(8), [UInt16(9)])},
         UInt32(-1),

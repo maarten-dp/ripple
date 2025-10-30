@@ -69,14 +69,14 @@ class Fragmenter:
 class FragmentBucket:
     @monotonic
     def __init__(self, now):
-        self.fragments: List[BytesIO] = []
+        self.fragments: List[bytes] = []
         self.crc32 = UInt32(0)
         self.created_at = now
         self.received = 0
 
-    def add_fragment(self, header: FragmentHeader, fragment: BytesIO):
+    def add_fragment(self, header: FragmentHeader, fragment: bytes):
         if not self.fragments:
-            self.fragments = [BytesIO(b"")] * int(header.count)
+            self.fragments = [b""] * int(header.count)
             self.crc32 = header.msg_crc32
         if self.crc32 != header.msg_crc32:
             raise ValueError("crc32 mismatch!")

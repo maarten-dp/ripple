@@ -25,7 +25,7 @@ class ComponentSnapshot(Packable):
         return cls(
             id=component.component_id,
             version=component.version_id,
-            data=component.pack(),
+            data=BytesField(component.pack()),
         )
 
 

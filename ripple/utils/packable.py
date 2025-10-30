@@ -53,7 +53,15 @@ def make_packer(cls) -> Packer:
                 raise ValueError("Dict keys must inherit from UIntBase")
             dict_fields.append((field, key_type, value_type))
             continue
-        elif origin in (list, set, tuple):
+        elif origin is tuple:
+            value_type = get_args(ann_type)
+            if len(value_type) > 2 or ... not in value_type:
+                raise ValueError(
+                    "Only one type is supported for iterables for now"
+                )
+            iterable_fields.append((field, origin, value_type[0]))
+            continue
+        elif origin in (list, set):
             value_type = get_args(ann_type)
             if len(value_type) > 1:
                 raise ValueError(
@@ -111,9 +119,7 @@ class StructPacker:
             values.append(field_value)
         return self.struct.pack(*values)
 
-    def unpack(
-        self, buffer: BytesIO
-    ) -> Tuple[Dict[str, UInt8 | UInt16 | UInt32], int]:
+    def unpack(self, buffer: BytesIO) -> Dict[str, UInt8 | UInt16 | UInt32]:
         payload = buffer.read(self.struct.size)
         if len(payload) < self.struct.size:
             raise ValueError("buffer too small for unpacking")
@@ -131,13 +137,13 @@ class BytesPacker:
     def pack(self, packable: Packable) -> bytes:
         payload = b""
         for field in self.bytes_fields:
-            field = getattr(packable, field)
-            if not isinstance(field, BytesField):
+            field_value = getattr(packable, field)
+            if not isinstance(field_value, BytesField):
                 raise ValueError(f"{field} is not of type BytesField")
-            payload += field.pack()
+            payload += field_value.pack()
         return payload
 
-    def unpack(self, buffer: BytesIO) -> Tuple[Dict[str, BytesField], int]:
+    def unpack(self, buffer: BytesIO) -> Dict[str, BytesField]:
         values = {}
         for field in self.bytes_fields:
             payload = BytesField.unpack(buffer)
@@ -147,7 +153,7 @@ class BytesPacker:
 
 @dataclass
 class PackablePacker:
-    packable_fields: Iterable[str, Packable]
+    packable_fields: List[Tuple[str, Type[Packable]]]
 
     def pack(self, packable: Packable) -> bytes:
         payload = b""
@@ -158,9 +164,7 @@ class PackablePacker:
             payload += field.pack()
         return payload
 
-    def unpack(
-        self, buffer: BytesIO
-    ) -> Dict[str, Dict[Type[UInt8 | UInt16 | UInt32], Packables]]:
+    def unpack(self, buffer: BytesIO) -> Dict[str, Packables]:
         values = {}
         for field_name, packable_type in self.packable_fields:
             values[field_name] = packable_type.unpack(buffer)
@@ -169,7 +173,7 @@ class PackablePacker:
 
 @dataclass
 class DictPacker:
-    dict_fields: Iterable[str, Type[UInt8 | UInt16 | UInt32], PackablesType]
+    dict_fields: List[Tuple[str, Type[UInt8 | UInt16 | UInt32], PackablesType]]
 
     def pack(self, packable: Packable) -> bytes:
         payload = b""
@@ -202,7 +206,7 @@ class DictPacker:
 
 @dataclass
 class IterablePacker:
-    iterable_fields: Iterable[str, Type[List | Set | Tuple], PackablesType]
+    iterable_fields: List[Tuple[str, Type[List | Set | Tuple], PackablesType]]
 
     def pack(self, packable: Packable) -> bytes:
         payload = b""
@@ -239,7 +243,7 @@ class Packer:
             payload += packer.pack(packable)
         return payload
 
-    def unpack(self, buffer: BytesIO) -> Tuple[Dict[str, Packables], int]:
+    def unpack(self, buffer: BytesIO) -> Dict[str, Packables]:
         fields = {}
         for packer in self.packers:
             unpacked_fields = packer.unpack(buffer)

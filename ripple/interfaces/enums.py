@@ -15,6 +15,8 @@ class RecType(IntEnum):
     SNAPSHOT = auto()
     DELTA = auto()
 
+    RESERVED = auto()
+
 
 class RecordFlags(IntFlag):
     NONE = auto()

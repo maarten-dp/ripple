@@ -5,7 +5,6 @@ from io import BytesIO
 import pytest
 from ripple.network.protocol import (
     RecType,
-    Delta,
     RecordMeta,
     Ack,
     Ping,
@@ -42,27 +41,27 @@ def test_ping_flags():
     assert ping.flags() == RecordFlags.NONE
 
 
-def test_delta_encode_decode():
+def test_delta_encode_decode(ReliableRecord):
     data = b"test payload data"
-    delta = Delta(blob=BytesField(data))
+    delta = ReliableRecord(blob=BytesField(data))
     payload = delta.pack()
-    decoded, _ = Delta.unpack(BytesIO(payload))
+    decoded, _ = ReliableRecord.unpack(BytesIO(payload))
     assert decoded.blob == data
 
 
-def test_delta_reliable_by_default():
-    delta = Delta(blob=BytesField(b"test"))
+def test_delta_reliable_by_default(ReliableRecord):
+    delta = ReliableRecord(blob=BytesField(b"test"))
     assert delta.flags() == RecordFlags.RELIABLE
 
 
-def test_record_meta_registry():
+def test_record_meta_registry(ReliableRecord):
     registry = RecordMeta.get_registry()
     assert RecType.ACK in registry
     assert RecType.PING in registry
     assert RecType.DELTA in registry
     assert registry[RecType.ACK] is Ack
     assert registry[RecType.PING] is Ping
-    assert registry[RecType.DELTA] is Delta
+    assert registry[RecType.RESERVED] is ReliableRecord
 
 
 def test_envelope_builder_single_record():
@@ -98,10 +97,10 @@ def test_envelope_builder_rollover():
     assert result.index[1].envelope_idx == 1
 
 
-def test_envelope_builder_record_too_large():
+def test_envelope_builder_record_too_large(ReliableRecord):
     small_budget = RecordHeader.size() + 5
     builder = EnvelopeBuilder(budget=small_budget)
-    large_delta = Delta(blob=BytesField(b"x" * 1000))
+    large_delta = ReliableRecord(blob=BytesField(b"x" * 1000))
     with pytest.raises(RecordTooLarge):
         builder.add(large_delta)
 
@@ -157,8 +156,8 @@ def test_ping_value_wrapping():
     assert decoded.ms == 0
 
 
-def test_delta_empty_blob():
-    delta = Delta(blob=BytesField(b""))
+def test_delta_empty_blob(ReliableRecord):
+    delta = ReliableRecord(blob=BytesField(b""))
     payload = delta.pack()
-    decoded, _ = Delta.unpack(BytesIO(payload))
+    decoded, _ = ReliableRecord.unpack(BytesIO(payload))
     assert decoded.blob == b""
