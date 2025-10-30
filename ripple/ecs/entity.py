@@ -11,7 +11,7 @@ from ..utils.packable import Packer, Packable, make_packer
 
 if TYPE_CHECKING:
     from .world import World
-    from .snapshot import Snapshot, EntitySnapshot, ComponentSnapshot
+    from .snapshot import ComponentSnapshot
 
 PACKERS = {}
 

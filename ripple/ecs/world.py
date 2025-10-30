@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict, TYPE_CHECKING
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .entity import Entity
 from .store import Store
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class World:
-    entities: Dict[UInt16, Entity]
+    entities: Dict[UInt16, Entity] = field(default_factory=dict)
     store: Store = Store()
 
     def create_entity(self, *components: Observable) -> Entity:

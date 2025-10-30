@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import List, Dict, TYPE_CHECKING
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 
 from .entity import Entity, Component
 from .utils import IdGenerator
@@ -31,8 +31,8 @@ class ComponentSnapshot(Packable):
 
 @dataclass(frozen=True)
 class EntitySnapshot(Packable):
-    version: UInt16
     id: UInt16
+    version: UInt16
     components: Dict[UInt16, ComponentSnapshot] = field(default_factory=dict)
 
     @classmethod
@@ -75,9 +75,28 @@ class EntitySnapshot(Packable):
                 updates[cid] = component
 
         return DeltaEntitySnapshot(
+            base_snapshot=snapshot.version,
+            target_snapshot=self.version,
             spawns=spawned,
             despawns=despawned,
             updates=updates,
+        )
+
+    def apply_delta(self, delta: DeltaEntitySnapshot) -> EntitySnapshot:
+        components = {}
+        for component in delta.spawns:
+            components[component.id] = component
+        for eid, component in self.components.items():
+            if eid in delta.despawns:
+                continue
+            elif eid in delta.updates:
+                components[eid] = delta.updates[eid]
+            else:
+                components[eid] = component
+        return EntitySnapshot(
+            id=self.id,
+            version=delta.target_snapshot,
+            components=components,
         )
 
 
@@ -107,7 +126,7 @@ class Snapshot(Packable):
 
         for eid in candidates:
             entity = snapshot.entities[eid]
-            if delta := entity.get_delta_from(self.entities[eid]):
+            if delta := self.entities[eid].get_delta_from(entity):
                 updates[eid] = delta
 
         return DeltaSnapshot(
@@ -118,9 +137,30 @@ class Snapshot(Packable):
             updates=updates,
         )
 
+    def apply_delta(self, delta: DeltaSnapshot) -> Snapshot:
+        if delta.base_snapshot != self.id:
+            raise ValueError("Cannot apply delta")
+
+        entities = {}
+        for entity in delta.spawns:
+            entities[entity.id] = entity
+        for eid, entity in self.entities.items():
+            if eid in delta.despawns:
+                continue
+            elif eid in delta.updates:
+                entities[eid] = entity.apply_delta(delta.updates[eid])
+            else:
+                entities[eid] = entity
+        return Snapshot(
+            id=delta.target_snapshot,
+            entities=entities,
+        )
+
 
 @dataclass(frozen=True)
 class DeltaEntitySnapshot(Packable):
+    base_snapshot: UInt16
+    target_snapshot: UInt16
     spawns: List[ComponentSnapshot]
     despawns: List[UInt16]
     updates: Dict[UInt16, ComponentSnapshot]

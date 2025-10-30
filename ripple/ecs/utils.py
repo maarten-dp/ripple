@@ -8,3 +8,6 @@ class IdGenerator:
     def __call__(self):
         self.id += 1
         return self.id
+
+    def reset(self):
+        self.id = UInt16(-1)

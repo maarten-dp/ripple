@@ -19,11 +19,11 @@ This file tracks the core tasks required to deliver the MVP for Ripple-sync.
 ## 2. Serialization & Messages
 - [X] Define schema for `Hello`, `Auth`, `Snapshot`, `Delta`, `Ack`
 - [X] Implement serializer with bit-packing + float quantization
-- [ ] Delta encoding: per-component + snapshot-to-snapshot
+- [X] Delta encoding: per-component + snapshot-to-snapshot
 
 ## 3. State Replication
-- [ ] Entity & component model with stable IDs + version counters
-- [ ] Snapshot builder (change detection)
+- [X] Entity & component model with stable IDs + version counters
+- [X] Snapshot builder (change detection)
 - [ ] Spawn/despawn logic; full snapshot on join
 - [ ] Interest management: simple grid AOI filter
 

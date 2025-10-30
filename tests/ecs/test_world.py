@@ -12,7 +12,7 @@ class Pos(Observable):
     x: UInt16
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def world():
     return World(entities={})
 
@@ -30,12 +30,12 @@ def test_it_can_make_a_world_snapshot(world: World):
     expected_snapshot = {
         "id": UInt16(0),
         "entities": {
-            UInt16(1): {
+            UInt16(0): {
                 "version": UInt16(0),
-                "id": UInt16(1),
+                "id": UInt16(0),
                 "components": {
-                    UInt16(8): {
-                        "id": UInt16(8),
+                    UInt16(0): {
+                        "id": UInt16(0),
                         "version": UInt16(0),
                         "data": {
                             "payload": b"\x00\x01",
@@ -104,3 +104,19 @@ def test_it_cannot_apply_snapshots_from_version_too_far_in_the_future(
     )
     with pytest.raises(ValueError, match="Version too far in the future"):
         pos_component.apply(future)
+
+
+def test_it_yields_the_same_snapshot_after_applying_a_delta(world: World):
+    pos = Pos(UInt16(1))
+    world.create_entity(pos)
+    entity2 = world.create_entity()
+    snapshot_t1 = Snapshot.from_world(world)
+    world.destroy_entity(entity2)
+    pos.x = UInt16(2)
+    world.create_entity(Pos(UInt16(1)))
+    snapshot_t2 = Snapshot.from_world(world)
+    delta = snapshot_t2.get_delta_from(snapshot_t1)
+    assert delta
+    delta_snapshot = snapshot_t1.apply_delta(delta)
+
+    assert snapshot_t2 == delta_snapshot
