@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Optional, List
 from collections import deque
 from dataclasses import dataclass, field
+from io import BytesIO
 
 from .network.transport import UdpEndpoint
 from .network.protocol import (
@@ -119,26 +120,24 @@ class ReliableConnection:
             self._parse_packet(packet)
 
         for payload in self.defragmenter.finish():
-            self._parse_records(payload)
+            self._parse_records(BytesIO(payload))
 
     def _parse_packet(self, packet):
         s.PACKET_OFFERED_FOR_PARSING.send(self, packet=packet)
-        buffer = memoryview(packet)
+        buffer = BytesIO(packet)
         try:
             header = PacketHeader.unpack(buffer)
         except ValueError as e:
             s.PACKET_DROPPED.send(reason="Invalid header", exception=e)
             return
 
-        header_size = header.size()
-        payload = buffer[header_size:]
         if PacketFlags.RELIABLE & header.flags:
             self.reliability.note_incoming_reliable(int(header.rid))
 
         if PacketFlags.FRAGMENT & header.flags:
-            self._parse_fragment(payload)
+            self._parse_fragment(buffer)
         else:
-            self._parse_records(payload)
+            self._parse_records(buffer)
 
     def _parse_fragment(self, payload):
         try:

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from io import BytesIO
 from typing import (
     ClassVar,
     Type,
@@ -50,30 +50,22 @@ class Record(metaclass=RecordMeta):
     @classmethod
     def unpack(
         cls,
-        buffer: memoryview,
+        buffer: BytesIO,
+        header: RecordHeader | None = None,
     ) -> Tuple[Self | RecordType, RecordHeader]:
-        header = RecordHeader.unpack(buffer)
+        if header is None:
+            header = RecordHeader.unpack(buffer)
 
-        # If called on base class, dispatch to concrete type
         if cls is Record:
             record_class = cls._registry.get(RecType(int(header.type)))
             if record_class is None:
                 raise KeyError(f"Unknown record type: {header.type}")
-            return record_class.unpack(buffer)
+            return record_class.unpack(buffer, header)
 
-        # If called on concrete class, validate type matches
         if header.type != cls.TYPE:
             raise ValueError(
                 f"Type mismatch: header={header.type}, class={cls.TYPE}"
             )
 
-        # Extract payload
-        payload_start = header.size()
-        payload_end = header.record_size()
-        payload = buffer[payload_start:payload_end]
-
-        # Decode payload
-        parameters, _ = cls._packer.unpack(payload)
-        record = cls(**parameters)
-
+        record = cls(**cls._packer.unpack(buffer))
         return record, header

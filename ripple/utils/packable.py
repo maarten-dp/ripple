@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-import sys
+from io import BytesIO
 import struct
 from inspect import get_annotations
 from typing import (
     Annotated,
     List,
+    Set,
+    Tuple,
     Dict,
     ClassVar,
-    Tuple,
     Type,
-    get_type_hints,
+    Iterable,
     get_origin,
     get_args,
 )
@@ -19,18 +20,23 @@ from enum import IntFlag, IntEnum
 from dataclasses import dataclass, field
 from inspect import isclass
 
-from .numerical_types import UIntBase, UInt8, UInt16, UInt32
+from .packable_types import UIntBase, UInt8, UInt16, UInt32, BytesField
 from ..interfaces import PackerType
+
 
 _ENDIAN = "!"
 _INT_ENUM_FMT = "B"
 
 
 def make_packer(cls) -> Packer:
+    packer = Packer()
     annotations = get_annotations(cls, eval_str=True)
     struct_format = _ENDIAN
     struct_fields = []
-    freefields = []
+    bytes_fields = []
+    dict_fields = []
+    iterable_fields = []
+    packable_fields = []
 
     for field, ann_type in annotations.items():
         origin = get_origin(ann_type)
@@ -41,14 +47,31 @@ def make_packer(cls) -> Packer:
             if base is bytes and len(meta) == 1:
                 if isinstance(meta[0], PackLen):
                     fmt = f"{meta[0].n}s"
+        elif origin is dict:
+            key_type, value_type = get_args(ann_type)
+            if not issubclass(key_type, UIntBase):
+                raise ValueError("Dict keys must inherit from UIntBase")
+            dict_fields.append((field, key_type, value_type))
+            continue
+        elif origin in (list, set, tuple):
+            value_type = get_args(ann_type)
+            if len(value_type) > 1:
+                raise ValueError(
+                    "Only one type is supported for iterables for now"
+                )
+            iterable_fields.append((field, origin, value_type[0]))
+            continue
         elif not isclass(ann_type):
             continue
         elif issubclass(ann_type, UIntBase):
             fmt = ann_type._struct_format
         elif issubclass(ann_type, (IntEnum, IntFlag)):
             fmt = _INT_ENUM_FMT
+        elif issubclass(ann_type, Packable):
+            packable_fields.append((field, ann_type))
+            continue
         elif ann_type is BytesField:
-            freefields.append(field)
+            bytes_fields.append(field)
             continue
         else:
             continue
@@ -56,12 +79,17 @@ def make_packer(cls) -> Packer:
         struct_format = f"{struct_format}{fmt}"
         struct_fields.append(field)
 
-    packer = Packer()
     if struct_fields:
         struct_instance = struct.Struct(struct_format)
         packer.add(StructPacker(struct_instance, struct_fields, annotations))
-    if freefields:
-        packer.add(BytesPacker(freefields))
+    if bytes_fields:
+        packer.add(BytesPacker(bytes_fields))
+    if dict_fields:
+        packer.add(DictPacker(dict_fields))
+    if iterable_fields:
+        packer.add(IterablePacker(iterable_fields))
+    if packable_fields:
+        packer.add(PackablePacker(packable_fields))
     return packer
 
 
@@ -76,51 +104,126 @@ class StructPacker:
     struct_fields: List[str]
     annotations: Dict[str, Type[UInt8 | UInt16 | UInt32]]
 
-    @property
-    def size(self) -> int:
-        return self.struct.size
-
-    def pack(self, packable: UIntBase) -> bytes:
+    def pack(self, packable: Packable) -> bytes:
         values = []
         for field in self.struct_fields:
-            values.append(getattr(packable, field))
+            field_value = getattr(packable, field)
+            values.append(field_value)
         return self.struct.pack(*values)
 
     def unpack(
-        self, buffer: memoryview
+        self, buffer: BytesIO
     ) -> Tuple[Dict[str, UInt8 | UInt16 | UInt32], int]:
-        if len(buffer) < self.size:
+        payload = buffer.read(self.struct.size)
+        if len(payload) < self.struct.size:
             raise ValueError("buffer too small for unpacking")
         values = {}
-        payload_buffer = buffer[: self.size]
-        unpacked = self.struct.unpack_from(payload_buffer)
+        unpacked = self.struct.unpack_from(payload)
         for field, value in zip(self.struct_fields, unpacked):
             values[field] = self.annotations[field](value)
-        return values, self.size
+        return values
 
 
 @dataclass
 class BytesPacker:
-    formfields: List[str]
+    bytes_fields: List[str]
 
-    @property
-    def size(self) -> int:
-        raise ValueError("Cannot determine size for BytesField")
-
-    def pack(self, packable: BytesField) -> bytes:
+    def pack(self, packable: Packable) -> bytes:
         payload = b""
-        for field in self.formfields:
-            payload += getattr(packable, field).pack()
+        for field in self.bytes_fields:
+            field = getattr(packable, field)
+            if not isinstance(field, BytesField):
+                raise ValueError(f"{field} is not of type BytesField")
+            payload += field.pack()
         return payload
 
-    def unpack(self, buffer: memoryview) -> Tuple[Dict[str, BytesField], int]:
-        offset = 0
+    def unpack(self, buffer: BytesIO) -> Tuple[Dict[str, BytesField], int]:
         values = {}
-        for field in self.formfields:
-            payload = BytesField.unpack(buffer[offset:])
+        for field in self.bytes_fields:
+            payload = BytesField.unpack(buffer)
             values[field] = payload
-            offset += payload.length
-        return values, offset
+        return values
+
+
+@dataclass
+class PackablePacker:
+    packable_fields: Iterable[str, Packable]
+
+    def pack(self, packable: Packable) -> bytes:
+        payload = b""
+        for field_name, packable_type in self.packable_fields:
+            field = getattr(packable, field_name)
+            if not isinstance(field, packable_type):
+                raise ValueError(f"{field_name} is not of type {packable_type}")
+            payload += field.pack()
+        return payload
+
+    def unpack(
+        self, buffer: BytesIO
+    ) -> Dict[str, Dict[Type[UInt8 | UInt16 | UInt32], Packables]]:
+        values = {}
+        for field_name, packable_type in self.packable_fields:
+            values[field_name] = packable_type.unpack(buffer)
+        return values
+
+
+@dataclass
+class DictPacker:
+    dict_fields: Iterable[str, Type[UInt8 | UInt16 | UInt32], PackablesType]
+
+    def pack(self, packable: Packable) -> bytes:
+        payload = b""
+        for field_name, key_type, value_type in self.dict_fields:
+            field = getattr(packable, field_name)
+            payload += UInt16(len(field)).pack()
+            for key, value in field.items():
+                if not isinstance(key, key_type):
+                    raise ValueError(f"{key} is not of type {key_type}")
+                if not isinstance(value, value_type):
+                    raise ValueError(f"{value} is not of type {value_type}")
+                payload += key.pack()
+                payload += value.pack()
+        return payload
+
+    def unpack(
+        self, buffer: BytesIO
+    ) -> Dict[str, Dict[UInt8 | UInt16 | UInt32, Packables]]:
+        values = {}
+        for field_name, key_type, value_type in self.dict_fields:
+            items = UInt16.unpack(buffer)
+            field_value = {}
+            for _ in range(items):
+                key = key_type.unpack(buffer)
+                value = value_type.unpack(buffer)
+                field_value[key] = value
+            values[field_name] = field_value
+        return values
+
+
+@dataclass
+class IterablePacker:
+    iterable_fields: Iterable[str, Type[List | Set | Tuple], PackablesType]
+
+    def pack(self, packable: Packable) -> bytes:
+        payload = b""
+        for field_name, iterable_type, packable_type in self.iterable_fields:
+            field = getattr(packable, field_name)
+            payload += UInt16(len(field)).pack()
+            if not isinstance(field, iterable_type):
+                raise ValueError(f"{field} is not of type {iterable_type}")
+            for value in field:
+                if not isinstance(value, packable_type):
+                    raise ValueError(f"{value} is not of type {packable_type}")
+                payload += value.pack()
+        return payload
+
+    def unpack(self, buffer: BytesIO) -> Dict[str, Iterable[Packables]]:
+        values = {}
+        for field_name, iterable_type, value_type in self.iterable_fields:
+            items = UInt16.unpack(buffer)
+            field_value = [value_type.unpack(buffer) for _ in range(items)]
+            values[field_name] = iterable_type(field_value)
+        return values
 
 
 @dataclass
@@ -130,53 +233,18 @@ class Packer:
     def add(self, packer: PackerType):
         self.packers.append(packer)
 
-    @property
-    def size(self) -> int:
-        return sum([p.size for p in self.packers])
-
     def pack(self, packable: Packables) -> bytes:
         payload = b""
         for packer in self.packers:
             payload += packer.pack(packable)
         return payload
 
-    def unpack(self, buffer: memoryview) -> Tuple[Dict[str, Packables], int]:
-        offset = 0
+    def unpack(self, buffer: BytesIO) -> Tuple[Dict[str, Packables], int]:
         fields = {}
         for packer in self.packers:
-            unpacked_fields, offset = packer.unpack(buffer[offset:])
+            unpacked_fields = packer.unpack(buffer)
             fields.update(unpacked_fields)
-        return fields, offset
-
-
-@dataclass
-class BytesField:
-    payload: bytes
-    length: UInt16 = field(init=False, default=UInt16(0))
-
-    _fmt: ClassVar[str] = f"!{UInt16._struct_format}"
-    _fmt_size: ClassVar[int] = struct.calcsize(_fmt)
-
-    def __post_init__(self):
-        if len(self.payload) > UInt16(-1):
-            raise ValueError("Payload too large")
-        self.length = UInt16(len(self.payload))
-
-    def pack(self) -> bytes:
-        return struct.pack(self._fmt, self.length) + self.payload
-
-    @classmethod
-    def unpack(cls, buffer: memoryview) -> Self:
-        (length,) = struct.unpack(cls._fmt, buffer[: cls._fmt_size])
-        start = cls._fmt_size
-        end = start + length
-        payload = buffer[start:end]
-        return cls(bytes(payload))
-
-    def __eq__(self, other: BytesField | bytes):
-        if isinstance(other, bytes):
-            return self.payload == other
-        self.payload == other.payload
+        return fields
 
 
 class PackableMeta(type):
@@ -193,13 +261,9 @@ class Packable(metaclass=PackableMeta):
         return self._packer.pack(self)
 
     @classmethod
-    def unpack(cls, buffer: memoryview) -> Self:
-        parameters, _ = cls._packer.unpack(buffer)
+    def unpack(cls, buffer: BytesIO) -> Self:
+        parameters = cls._packer.unpack(buffer)
         return cls(**parameters)
-
-    @classmethod
-    def size(cls) -> int:
-        return cls._packer.size
 
 
 Packables = UInt8 | UInt16 | UInt32 | BytesField | Packable

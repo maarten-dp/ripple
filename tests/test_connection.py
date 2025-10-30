@@ -1,5 +1,4 @@
 import pytest
-import time
 
 from ripple import Address, UdpEndpointConfig
 from ripple.connection import ReliableConnection
@@ -41,7 +40,7 @@ def test_basic_unreliable_send_receive(get_connection):
     timer = Timer()
     received = None
     while received is None:
-        if timer.delta() > 1.0:
+        if timer.delta() > 0.01:
             assert False, "Did not receive in time"
 
         sender.tick()
@@ -64,7 +63,7 @@ def test_basic_reliable_send_receive(get_connection):
     timer = Timer()
     received = None
     while received is None:
-        if timer.delta() > 1.0:
+        if timer.delta() > 0.01:
             assert False, "Did not receive in time"
 
         sender.tick()
@@ -90,7 +89,7 @@ def test_multiple_records_in_single_envelope(get_connection):
     timer = Timer()
     records = []
     while len(records) < 4:
-        if timer.delta() > 1.0:
+        if timer.delta() > 0.01:
             assert False, f"Only received {len(records)}/4 records"
 
         sender.tick()
@@ -128,7 +127,7 @@ def test_bidirectional_communication(get_connection):
     b_received = None
 
     while a_received is None or b_received is None:
-        if timer.delta() > 1.0:
+        if timer.delta() > 0.01:
             assert False, "Not all messages received in time"
 
         conn_a.tick()
@@ -154,7 +153,7 @@ def test_recv_all_returns_multiple_records(get_connection):
     timer = Timer()
     records = []
     while len(records) < 5:
-        if timer.delta() > 1.0:
+        if timer.delta() > 0.01:
             assert False, "Did not receive all records"
 
         sender.tick()
@@ -187,7 +186,7 @@ def test_ack_generation_and_processing(get_connection):
 
     # Run for a bit to allow ACK generation and processing
     while not received_ack:
-        if timer.delta() > 1.0:
+        if timer.delta() > 0.01:
             assert False, "Did not receive ack in time"
         sender.tick()
         receiver.tick()
@@ -223,7 +222,7 @@ def test_it_can_deal_with_a_fragmented_package(get_connection):
 
     timer = Timer()
     while (record := receiver.recv_record()) is None:
-        if timer.delta() > 1.0:
+        if timer.delta() > 0.01:
             assert False, "Did not receive all records"
         sender.tick()
         receiver.tick()

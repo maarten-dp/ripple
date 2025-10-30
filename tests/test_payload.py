@@ -1,10 +1,14 @@
+from typing import ClassVar
+from dataclasses import dataclass
+from io import BytesIO
+
 import pytest
 from ripple.network.protocol import (
     RecType,
+    Delta,
     RecordMeta,
     Ack,
     Ping,
-    Delta,
     EnvelopeBuilder,
     RecordHeader,
     RecordTooLarge,
@@ -16,7 +20,7 @@ from ripple.interfaces import RecordFlags
 def test_ack_encode_decode():
     ack = Ack(ack_base=UInt16(100), mask=UInt16(0xABCD))
     payload = ack.pack()
-    decoded, _ = Ack.unpack(memoryview(payload))
+    decoded, _ = Ack.unpack(BytesIO(payload))
     assert decoded.ack_base == 100
     assert decoded.mask == 0xABCD
 
@@ -29,7 +33,7 @@ def test_ack_flags():
 def test_ping_encode_decode():
     ping = Ping(id=UInt16(1), ms=UInt32(1234567))
     payload = ping.pack()
-    decoded, _ = Ping.unpack(memoryview(payload))
+    decoded, _ = Ping.unpack(BytesIO(payload))
     assert decoded.ms == 1234567
 
 
@@ -42,7 +46,7 @@ def test_delta_encode_decode():
     data = b"test payload data"
     delta = Delta(blob=BytesField(data))
     payload = delta.pack()
-    decoded, _ = Delta.unpack(memoryview(payload))
+    decoded, _ = Delta.unpack(BytesIO(payload))
     assert decoded.blob == data
 
 
@@ -141,7 +145,7 @@ def test_envelope_builder_unreliable_ping():
 def test_ack_value_wrapping():
     ack = Ack(ack_base=UInt16(0x10000), mask=UInt16(0x10000))
     payload = ack.pack()
-    decoded, _ = Ack.unpack(memoryview(payload))
+    decoded, _ = Ack.unpack(BytesIO(payload))
     assert decoded.ack_base == 0
     assert decoded.mask == 0
 
@@ -149,12 +153,12 @@ def test_ack_value_wrapping():
 def test_ping_value_wrapping():
     ping = Ping(id=UInt16(1), ms=UInt32(0x100000000))
     payload = ping.pack()
-    decoded, _ = Ping.unpack(memoryview(payload))
+    decoded, _ = Ping.unpack(BytesIO(payload))
     assert decoded.ms == 0
 
 
 def test_delta_empty_blob():
     delta = Delta(blob=BytesField(b""))
     payload = delta.pack()
-    decoded, _ = Delta.unpack(memoryview(payload))
+    decoded, _ = Delta.unpack(BytesIO(payload))
     assert decoded.blob == b""

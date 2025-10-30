@@ -1,6 +1,7 @@
 import zlib
 from typing import List, Dict, Optional
 from dataclasses import dataclass, field
+from io import BytesIO
 
 from ...utils import monotonic, UInt8, UInt16, UInt32
 from .headers import FragmentHeader
@@ -33,14 +34,13 @@ class Fragmenter:
         size = UInt16(payload_len)
         crc32 = UInt32(zlib.crc32(payload))
 
-        buffer = memoryview(payload)
+        buffer = BytesIO(payload)
         msg_id = self._get_msg_id()
 
         fragments = []
         for start in range(0, payload_len, self.fragment_size):
-            end = start + self.fragment_size
-            fragment_payload = buffer[start:end]
-            fragments.append(bytes(fragment_payload))
+            fragment_payload = buffer.read(self.fragment_size)
+            fragments.append(fragment_payload)
 
         count = UInt8(len(fragments))
         for idx, fragment in enumerate(fragments):
@@ -69,14 +69,14 @@ class Fragmenter:
 class FragmentBucket:
     @monotonic
     def __init__(self, now):
-        self.fragments: List[memoryview] = []
+        self.fragments: List[BytesIO] = []
         self.crc32 = UInt32(0)
         self.created_at = now
         self.received = 0
 
-    def add_fragment(self, header: FragmentHeader, fragment: memoryview):
+    def add_fragment(self, header: FragmentHeader, fragment: BytesIO):
         if not self.fragments:
-            self.fragments = [memoryview(b"")] * int(header.count)
+            self.fragments = [BytesIO(b"")] * int(header.count)
             self.crc32 = header.msg_crc32
         if self.crc32 != header.msg_crc32:
             raise ValueError("crc32 mismatch!")
@@ -120,19 +120,17 @@ class Defragmenter:
         )
         self._buckets.pop(oldest_key, None)
 
-    def register_fragment(self, fragment: bytes) -> Optional[bytes]:
+    def register_fragment(self, fragment: BytesIO) -> Optional[bytes]:
         self._expire()
 
-        buffer = memoryview(fragment)
-        header = FragmentHeader.unpack(buffer)
-        payload = buffer[FragmentHeader.size() :]
+        header = FragmentHeader.unpack(fragment)
         bucket = self._buckets.get(header.msg_id)
         if bucket is None:
             bucket = FragmentBucket()
             self._buckets[header.msg_id] = bucket
             self._evict()
 
-        bucket.add_fragment(header, payload)
+        bucket.add_fragment(header, fragment.read())
         if bucket.can_reconstruct:
             self._buckets.pop(header.msg_id)
             self._reconstructed.append(bucket.reconstruct())

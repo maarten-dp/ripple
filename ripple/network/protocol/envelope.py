@@ -1,6 +1,6 @@
-import struct
-from typing import Optional, List
+from typing import List
 from dataclasses import dataclass, field
+from io import BytesIO
 
 from .base_record import Record, RecordType
 from ...interfaces import RecordFlags, RecordType
@@ -101,14 +101,11 @@ class EnvelopeOpener:
     def __init__(self):
         pass
 
-    def unpack(self, payload: bytes) -> List[RecordType]:
-        buffer = memoryview(payload)
-        buffer_size = len(buffer)
-        offset = 0
+    def unpack(self, payload: BytesIO) -> List[RecordType]:
+        buffer_size = len(payload.getvalue())
         records = []
 
-        while offset < buffer_size:
-            record, header = Record.unpack(buffer[offset:])
-            offset += header.record_size()
+        while payload.tell() < buffer_size:
+            record, _ = Record.unpack(payload)
             records.append(record)
         return records

@@ -1,10 +1,10 @@
 from __future__ import annotations
-from typing import Annotated
+from typing import Annotated, cast
 from dataclasses import dataclass
 
 from ...utils import UInt8, UInt16, UInt32
 from ...interfaces import PacketFlags
-from ...utils.packable import Packable, PackLen
+from ...utils.packable import Packable, PackLen, StructPacker
 
 MAGIC = b"RP"
 VERSION_V1 = 0x01
@@ -13,8 +13,15 @@ U16_MOD = 1 << 16
 U16_HALF = 1 << 15
 
 
+class Header(Packable):
+    @classmethod
+    def size(cls):
+        packer = cast(StructPacker, cls._packer.packers[0])
+        return packer.struct.size
+
+
 @dataclass(frozen=True)
-class PacketHeader(Packable):
+class PacketHeader(Header):
     magic: Annotated[bytes, PackLen(2)] = MAGIC
     version: UInt8 = UInt8(VERSION_V1)
     flags: PacketFlags = PacketFlags.NONE
@@ -43,17 +50,14 @@ class PacketHeader(Packable):
 
 
 @dataclass(frozen=True)
-class RecordHeader(Packable):
+class RecordHeader(Header):
     type: UInt8
     flags: UInt8
     length: UInt16
 
-    def record_size(self) -> int:
-        return self.size() + int(self.length)
-
 
 @dataclass(frozen=True)
-class FragmentHeader(Packable):
+class FragmentHeader(Header):
     msg_id: UInt16
     index: UInt8
     count: UInt8

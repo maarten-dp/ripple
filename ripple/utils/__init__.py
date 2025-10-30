@@ -1,8 +1,7 @@
 import time
 from typing import Callable
 
-from .numerical_types import UInt8, UInt16, UInt32
-from .packable import BytesField
+from .packable_types import UInt8, UInt16, UInt32, BytesField
 
 
 def clamp(value, lowest, highest):

@@ -1,9 +1,9 @@
-import pytest
+from io import BytesIO
 
 from ripple.network.protocol import (
+    Delta,
     Ack,
     Ping,
-    Delta,
     EnvelopeBuilder,
     EnvelopeOpener,
 )
@@ -19,7 +19,7 @@ def test_it_can_roundtrip_single_ping():
     result = builder.finish()
 
     assert len(result.envelopes) == 1
-    records = opener.unpack(result.envelopes[0].payload)
+    records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 1
     assert isinstance(records[0], Ping)
     assert records[0].ms == 42
@@ -34,7 +34,7 @@ def test_it_can_roundtrip_single_ack():
     result = builder.finish()
 
     assert len(result.envelopes) == 1
-    records = opener.unpack(result.envelopes[0].payload)
+    records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 1
     assert isinstance(records[0], Ack)
     assert records[0].ack_base == 100
@@ -50,7 +50,7 @@ def test_it_can_roundtrip_single_delta():
     result = builder.finish()
 
     assert len(result.envelopes) == 1
-    records = opener.unpack(result.envelopes[0].payload)
+    records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 1
     assert isinstance(records[0], Delta)
     assert records[0].blob == b"test data payload"
@@ -72,7 +72,7 @@ def test_it_can_roundtrip_multiple_records_in_same_envelope():
     result = builder.finish()
 
     assert len(result.envelopes) == 1
-    records = opener.unpack(result.envelopes[0].payload)
+    records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 4
 
     assert isinstance(records[0], Ping)
@@ -108,7 +108,7 @@ def test_it_can_roundtrip_across_multiple_envelopes():
 
     all_records = []
     for envelope in result.envelopes:
-        records = opener.unpack(envelope.payload)
+        records = opener.unpack(BytesIO(envelope.payload))
         all_records.extend(records)
 
     assert len(all_records) == 3
@@ -125,7 +125,7 @@ def test_it_can_roundtrip_empty_delta():
     builder.add(delta)
     result = builder.finish()
 
-    records = opener.unpack(result.envelopes[0].payload)
+    records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 1
     assert isinstance(records[0], Delta)
     assert records[0].blob == b""
@@ -140,7 +140,7 @@ def test_it_can_roundtrip_large_delta():
     builder.add(delta)
     result = builder.finish()
 
-    records = opener.unpack(result.envelopes[0].payload)
+    records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 1
     assert isinstance(records[0], Delta)
     assert records[0].blob == large_data
@@ -157,7 +157,7 @@ def test_it_handles_wraparound_values():
     builder.add(ping)
     result = builder.finish()
 
-    records = opener.unpack(result.envelopes[0].payload)
+    records = opener.unpack(BytesIO(result.envelopes[0].payload))
     assert len(records) == 2
     assert isinstance(records[0], Ack)
     assert records[0].ack_base == 0xFFFF
@@ -182,7 +182,7 @@ def test_it_can_roundtrip_all_record_types():
         builder.add(rec)
 
     result = builder.finish()
-    unpacked_records = opener.unpack(result.envelopes[0].payload)
+    unpacked_records = opener.unpack(BytesIO(result.envelopes[0].payload))
 
     assert len(unpacked_records) == len(records_to_pack)
 
@@ -208,7 +208,7 @@ def test_it_preserves_record_order():
 
     all_records = []
     for envelope in result.envelopes:
-        all_records.extend(opener.unpack(envelope.payload))
+        all_records.extend(opener.unpack(BytesIO(envelope.payload)))
 
     assert len(all_records) == 10
     for i, record in enumerate(all_records):
@@ -228,9 +228,9 @@ def test_it_creates_separate_envelopes_after_flush():
     result = builder.finish()
     assert len(result.envelopes) == 3
 
-    records_0 = opener.unpack(result.envelopes[0].payload)
-    records_1 = opener.unpack(result.envelopes[1].payload)
-    records_2 = opener.unpack(result.envelopes[2].payload)
+    records_0 = opener.unpack(BytesIO(result.envelopes[0].payload))
+    records_1 = opener.unpack(BytesIO(result.envelopes[1].payload))
+    records_2 = opener.unpack(BytesIO(result.envelopes[2].payload))
 
     assert len(records_0) == 1
     assert isinstance(records_0[0], Ping)

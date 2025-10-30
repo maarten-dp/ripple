@@ -1,4 +1,6 @@
 import zlib
+from io import BytesIO
+
 from ripple.network.protocol.fragmenter import (
     Fragmenter,
     FragmentHeader,
@@ -19,7 +21,7 @@ def test_it_can_fragment_a_payload():
 
     reconstructed_payload = b""
     for idx, fragment in enumerate(fragments):
-        header = FragmentHeader.unpack(memoryview(fragment.payload))
+        header = FragmentHeader.unpack(BytesIO(fragment.payload))
         assert header.msg_id == 5
         assert header.index == idx
         assert header.count == 4
@@ -43,7 +45,7 @@ def test_it_can_register_a_defragment_payload():
     fragments = fragmenter.finish()
 
     assert not defragmenter._buckets
-    defragmenter.register_fragment(fragments[0].payload)
+    defragmenter.register_fragment(BytesIO(fragments[0].payload))
     assert len(defragmenter._buckets) == 1
     bucket = defragmenter._buckets[UInt16(5)]
     # 1 fragment and 3 None slots
@@ -62,6 +64,6 @@ def test_it_can_defragment_a_payload():
     payload = b"a" * 40
     fragmenter.fragment(payload)
     for fragment in fragmenter.finish():
-        defragmenter.register_fragment(fragment.payload)
+        defragmenter.register_fragment(BytesIO(fragment.payload))
     defragmented_payload = defragmenter.finish()[0]
     assert payload == defragmented_payload

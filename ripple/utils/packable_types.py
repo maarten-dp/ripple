@@ -1,7 +1,10 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, ClassVar
+from dataclasses import dataclass
+from io import BytesIO
 from dataclasses import field
 from typing_extensions import Self
+import struct
 
 
 Q16_16_SCALE = 1 << 16
@@ -204,6 +207,19 @@ class UIntBase(int):
     def __str__(self) -> str:
         return str(int(self))
 
+    @classmethod
+    def _struct_size(cls):
+        return struct.calcsize(cls._struct_format)
+
+    def pack(self) -> bytes:
+        return struct.pack(self._struct_format, self)
+
+    @classmethod
+    def unpack(cls, buffer: BytesIO) -> Self:
+        chunk = buffer.read(cls._struct_size())
+        (data,) = struct.unpack(cls._struct_format, chunk)
+        return cls(data)
+
 
 class UInt8(UIntBase):
     _mask = 0xFF
@@ -226,6 +242,36 @@ class UInt32(UIntBase):
 class Q16_16(float):
     def to_uint32(self) -> UInt32:
         return UInt32(self * Q16_16_SCALE)
+
+
+@dataclass
+class BytesField:
+    payload: bytes
+    length: UInt16 = field(init=False, default=UInt16(0))
+
+    _fmt: ClassVar[str] = f"!{UInt16._struct_format}"
+    _fmt_size: ClassVar[int] = struct.calcsize(_fmt)
+
+    def __post_init__(self):
+        if len(self.payload) > UInt16(-1):
+            raise ValueError("Payload too large")
+        self.length = UInt16(len(self.payload))
+
+    def pack(self) -> bytes:
+        return struct.pack(self._fmt, self.length) + self.payload
+
+    @classmethod
+    def unpack(cls, buffer: BytesIO) -> Self:
+        (length,) = struct.unpack(cls._fmt, buffer.read(cls._fmt_size))
+        payload = buffer.read(length)
+        if len(payload) != length:
+            raise ValueError("Incomplete or corrupt buffer")
+        return cls(payload)
+
+    def __eq__(self, other: BytesField | bytes):
+        if isinstance(other, bytes):
+            return self.payload == other
+        return self.payload == other.payload
 
 
 # # ==========================================================

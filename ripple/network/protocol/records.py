@@ -6,6 +6,7 @@ from .base_record import Record, RecType
 from ...utils import UInt8, UInt16, UInt32
 from ...interfaces import DisconnectReason
 from ...utils.packable import BytesField
+from ...ecs.snapshot import DeltaSnapshot, Snapshot
 
 
 @dataclass(slots=True)
@@ -91,7 +92,7 @@ class Delta(Record):
     TYPE: ClassVar[RecType] = RecType.DELTA
     RELIABLE_BY_DEFAULT = True
 
-    blob: BytesField = BytesField(b"")
+    snapshot: DeltaSnapshot
 
 
 @dataclass(slots=True)
@@ -99,4 +100,4 @@ class Snapshot(Record):
     TYPE: ClassVar[RecType] = RecType.SNAPSHOT
     RELIABLE_BY_DEFAULT = True
 
-    blob: BytesField = BytesField(b"")
+    snapshot: Snapshot
