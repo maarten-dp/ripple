@@ -8,6 +8,9 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 from ripple import Address, UdpEndpointConfig
 from ripple.connection import ReliableConnection
 from ripple.core.server.extensions import ClientExtension
+from ripple.ecs.world import World
+
+from simulation import Simulation, ServerSnapshotExtension
 
 
 def get_connection():
@@ -17,11 +20,19 @@ def get_connection():
         local_addr=local_addr,
         remote_addr=remote_addr,
     )
-    return ReliableConnection(cfg, mtu=1200, extenstions=[ClientExtension()])
+    return ReliableConnection(
+        cfg,
+        mtu=1200,
+        extenstions=[
+            ClientExtension(),
+            ServerSnapshotExtension(Simulation(World())),
+        ],
+    )
 
 
 def run(tick=1 / 30):
     connection = get_connection()
+    time.sleep(2)
     while True:
         try:
             t1 = time.monotonic()

@@ -2,29 +2,31 @@ from __future__ import annotations
 from typing import List, Dict, TYPE_CHECKING
 from dataclasses import dataclass, field, asdict
 
-from .entity import Entity, Component
 from .utils import IdGenerator
 from ..utils import UInt16, BytesField
 from ..utils.packable import Packable
 
 if TYPE_CHECKING:
     from .world import World
+    from .entity import Entity, Component
 
 
 @dataclass(frozen=True)
 class ComponentSnapshot(Packable):
     id: UInt16
     version: UInt16
+    type_id: UInt16
     data: BytesField
 
     @classmethod
-    def from_component(cls, component: Component):
+    def from_component(cls, world: World, component: Component):
         if component.instance._dirty:
             component.version_id += 1
             component.instance._dirty.clear()
         return cls(
             id=component.component_id,
             version=component.version_id,
+            type_id=world.component_types[component.type],
             data=BytesField(component.pack()),
         )
 
@@ -36,12 +38,12 @@ class EntitySnapshot(Packable):
     components: Dict[UInt16, ComponentSnapshot] = field(default_factory=dict)
 
     @classmethod
-    def from_entity(cls, entity: Entity):
+    def from_entity(cls, world: World, entity: Entity):
         component_snapshots = {}
         dirty = []
         for comp_id, component in entity.components.items():
             cversion = component.version_id
-            delta = ComponentSnapshot.from_component(component)
+            delta = ComponentSnapshot.from_component(world, component)
             dirty.append(cversion != component.version_id)
             component_snapshots[comp_id] = delta
 
@@ -109,7 +111,7 @@ class Snapshot(Packable):
     def from_world(self, world: World):
         entities = {}
         for eid, entity in world.entities.items():
-            entities[eid] = EntitySnapshot.from_entity(entity)
+            entities[eid] = EntitySnapshot.from_entity(self, entity)
         return Snapshot(entities=entities)
 
     def get_delta_from(self, snapshot: Snapshot) -> DeltaSnapshot | None:
@@ -138,8 +140,12 @@ class Snapshot(Packable):
         )
 
     def apply_delta(self, delta: DeltaSnapshot) -> Snapshot:
+        if delta.base_snapshot < self.id:
+            return None
         if delta.base_snapshot != self.id:
-            raise ValueError("Cannot apply delta")
+            raise ValueError(
+                f"Cannot apply delta {delta.base_snapshot} != {self.id}"
+            )
 
         entities = {}
         for entity in delta.spawns:

@@ -45,6 +45,10 @@ class Store:
     def remove_component(self, eid: UInt16, component: Component) -> None:
         self.stores[component.type].remove(eid)
 
+    def purge_enitity(self, eid: UInt16):
+        for store in self.stores:
+            store.data.pop(eid)
+
     def get_component(
         self,
         eid: UInt16,

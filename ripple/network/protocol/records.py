@@ -101,3 +101,13 @@ class Snapshot(Record):
     RELIABLE_BY_DEFAULT = True
 
     snapshot: Snapshot
+
+
+@dataclass(slots=True)
+class Input(Record):
+    TYPE: ClassVar[RecType] = RecType.INPUT
+    RELIABLE_BY_DEFAULT = True
+
+    key: UInt16
+    modifiers: UInt8
+    up_down: UInt8

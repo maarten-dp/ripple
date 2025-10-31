@@ -9,6 +9,9 @@ from ripple import Address, UdpEndpointConfig
 from ripple.connection import ReliableConnection
 from ripple.network.protocol.records import Hello
 from ripple.utils import UInt8, UInt32
+from ripple.ecs.world import World
+
+from simulation import Simulation, ClientSnapshotExtension
 
 
 def get_connection():
@@ -18,11 +21,18 @@ def get_connection():
         local_addr=local_addr,
         remote_addr=remote_addr,
     )
-    return ReliableConnection(cfg, mtu=1200)
+    return ReliableConnection(
+        cfg,
+        mtu=1200,
+        extenstions=[
+            ClientSnapshotExtension(Simulation(World())),
+        ],
+    )
 
 
 def run(tick=1 / 30):
     connection = get_connection()
+    time.sleep(2)
     hello = Hello(
         protocol_version=UInt8(0),
         client_nonce=UInt32(0),

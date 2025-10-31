@@ -14,6 +14,7 @@ class RecType(IntEnum):
 
     SNAPSHOT = auto()
     DELTA = auto()
+    INPUT = auto()
 
     RESERVED = auto()
 
